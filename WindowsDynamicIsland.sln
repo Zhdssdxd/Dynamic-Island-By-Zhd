@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WindowsDynamicIsland", "src\WindowsDynamicIsland\WindowsDynamicIsland.csproj", "{4BAD30B7-E045-460D-9349-3A091D0AD3CB}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WindowsDynamicIsland.Tests", "tests\WindowsDynamicIsland.Tests\WindowsDynamicIsland.Tests.csproj", "{2700739D-A021-460F-BB2B-A9D71CA342BD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4BAD30B7-E045-460D-9349-3A091D0AD3CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4BAD30B7-E045-460D-9349-3A091D0AD3CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4BAD30B7-E045-460D-9349-3A091D0AD3CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4BAD30B7-E045-460D-9349-3A091D0AD3CB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2700739D-A021-460F-BB2B-A9D71CA342BD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2700739D-A021-460F-BB2B-A9D71CA342BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2700739D-A021-460F-BB2B-A9D71CA342BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2700739D-A021-460F-BB2B-A9D71CA342BD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B2794901-9A34-4A1D-862F-A400AE8CF88D}
+	EndGlobalSection
+EndGlobal
