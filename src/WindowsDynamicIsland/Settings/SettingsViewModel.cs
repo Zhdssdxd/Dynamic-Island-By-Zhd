@@ -149,6 +149,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         AppVersion = version is null ? "—" : version.ToString(3);
 
         RefreshMonitors(settings.Current.System.MonitorDeviceName);
+        RefreshAudioDevices(settings.Current.Features.VisualizerDeviceId);
         Load(settings.Current);
         UpdateTimerState(bus.GetLast<TimerStateChanged>());
         RefreshStatuses();
@@ -388,6 +389,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(ref _visualizerStyle, value, (s, v) => s.Features.VisualizerStyle = v);
     }
 
+    private string _visualizerDeviceId = "";
+    /// <summary>Output device captured by the visualizer ("" = Windows default).</summary>
+    public string VisualizerDeviceId
+    {
+        get => _visualizerDeviceId;
+        set => Set(ref _visualizerDeviceId, value ?? "", (s, v) => s.Features.VisualizerDeviceId = v);
+    }
+
+    private IReadOnlyList<SettingsOption> _audioDeviceOptions = Array.Empty<SettingsOption>();
+    public IReadOnlyList<SettingsOption> AudioDeviceOptions { get => _audioDeviceOptions; private set => SetProperty(ref _audioDeviceOptions, value); }
+
     private double _visualizerSensitivity;
     public double VisualizerSensitivity
     {
@@ -592,6 +604,19 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         MonitorOptions = options;
     }
 
+    public void RefreshAudioDevices(string? selectedId = null)
+    {
+        var options = new List<SettingsOption> { new("Устройство вывода по умолчанию", "") };
+        foreach (var device in WindowsDynamicIsland.Audio.AudioAnalyzer.GetRenderDevices())
+            options.Add(new SettingsOption(device.Value, device.Key));
+
+        var selected = selectedId ?? _visualizerDeviceId;
+        if (!string.IsNullOrEmpty(selected) && !options.Any(o => string.Equals((string)o.Value, selected, StringComparison.Ordinal)))
+            options.Add(new SettingsOption("Отключённое устройство", selected));
+
+        AudioDeviceOptions = options;
+    }
+
     /// <summary>Writes all pending edits in one settings update.</summary>
     public void Flush()
     {
@@ -667,6 +692,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             VideoMode = f.VideoModeEnabled;
             VisualizerEnabled = f.VisualizerEnabled;
             VisualizerStyle = f.VisualizerStyle;
+            VisualizerDeviceId = f.VisualizerDeviceId;
             VisualizerSensitivity = f.VisualizerSensitivity;
             DownloadsEnabled = f.DownloadsEnabled;
             DownloadsFolder = f.DownloadsFolder;

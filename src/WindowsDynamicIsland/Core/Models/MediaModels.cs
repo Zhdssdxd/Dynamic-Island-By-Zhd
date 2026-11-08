@@ -71,7 +71,9 @@ public sealed record MediaSessionInfo
         if (IsPlaying)
         {
             var delta = now - PositionUpdatedAt;
-            if (delta > TimeSpan.Zero) pos += TimeSpan.FromTicks((long)(delta.Ticks * Math.Max(0.0, PlaybackRate)));
+            // Some sources (e.g. Firefox) report a 0 rate while playing: a playing session always advances.
+            var rate = PlaybackRate > 0 && double.IsFinite(PlaybackRate) ? PlaybackRate : 1.0;
+            if (delta > TimeSpan.Zero) pos += TimeSpan.FromTicks((long)(delta.Ticks * rate));
         }
         if (pos < TimeSpan.Zero) pos = TimeSpan.Zero;
         if (pos > Duration) pos = Duration;

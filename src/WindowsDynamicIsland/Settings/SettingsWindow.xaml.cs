@@ -155,6 +155,8 @@ public partial class SettingsWindow : Window
 
     private void RefreshMonitors_Click(object sender, RoutedEventArgs e) => _vm.RefreshMonitors();
 
+    private void RefreshAudioDevices_Click(object sender, RoutedEventArgs e) => _vm.RefreshAudioDevices();
+
     private void ResetSettings_Click(object sender, RoutedEventArgs e)
     {
         var answer = MessageBox.Show(this,

@@ -149,6 +149,7 @@ public sealed class SettingsManager : IDisposable
         f.NotificationDurationSeconds = Clamp(f.NotificationDurationSeconds, 2, 30, 5);
         f.VisualizerSensitivity = Clamp(f.VisualizerSensitivity, 0.5, 2.0, 1.0);
         f.DownloadsFolder ??= "";
+        f.VisualizerDeviceId ??= "";
 
         var i = s.Indicators;
         i.DurationSeconds = Clamp(i.DurationSeconds, 0.8, 10, 1.8);

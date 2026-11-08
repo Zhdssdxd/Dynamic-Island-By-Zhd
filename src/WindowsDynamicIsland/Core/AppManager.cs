@@ -76,7 +76,7 @@ public sealed class AppManager : IAsyncDisposable
 
         // ── Shell
         _subs.Add(_bus.Subscribe<OpenSettingsRequested>(_ => ShowSettings(), onUiThread: true));
-        _subs.Add(_bus.Subscribe<ExitRequested>(_ => _ = _app.ShutdownAppAsync(), onUiThread: true));
+        _subs.Add(_bus.Subscribe<ExitRequested>(e => _ = _app.ShutdownAppAsync(), onUiThread: true));
 
         _island = new IslandWindow(_controller, _settings);
         _island.Show();

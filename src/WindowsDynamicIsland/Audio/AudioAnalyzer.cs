@@ -77,6 +77,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
     private int _consumers;
     private long _lastReleaseTimestamp;
     private int _restartFlag;
+    private volatile string _deviceId = "";
     private long _scheduledDue = long.MaxValue;
 
     private bool _faulted;     // _failureGate
@@ -96,6 +97,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         var features = settings.Current.Features;
         _enabled = features.VisualizerEnabled;
+        _deviceId = features.VisualizerDeviceId ?? "";
         _sensitivity = SanitizeSensitivity(features.VisualizerSensitivity);
         _reconcileTimer = new Timer(OnReconcileTimer, null, Timeout.Infinite, Timeout.Infinite);
     }
@@ -380,7 +382,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         CaptureSession? session = null;
         try
         {
-            device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            device = ResolveCaptureDevice(enumerator, _deviceId);
             capture = new WasapiLoopbackCapture(device);
 
             var converter = SampleConverter.TryCreate(capture.WaveFormat, out var formatError);
@@ -532,6 +534,16 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         var features = e.Settings.Features;
         _sensitivity = SanitizeSensitivity(features.VisualizerSensitivity);
 
+        var deviceId = features.VisualizerDeviceId ?? "";
+        if (!string.Equals(_deviceId, deviceId, StringComparison.Ordinal))
+        {
+            // Another endpoint was chosen: restart capture on it (if capturing).
+            _deviceId = deviceId;
+            ResetFailures();
+            Interlocked.Exchange(ref _restartFlag, 1);
+            ScheduleReconcile(0);
+        }
+
         var enabled = features.VisualizerEnabled;
         if (_enabled == enabled) return;
         _enabled = enabled;
@@ -539,6 +551,53 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         if (enabled) ResetFailures();
         if (_running) PublishStatus(true, enabled ? null : DisabledMessage);
         ScheduleReconcile(0);
+    }
+
+    /// <summary>
+    /// The endpoint to capture: the configured one when it exists and is active, otherwise the default
+    /// multimedia render device.
+    /// </summary>
+    private static MMDevice ResolveCaptureDevice(MMDeviceEnumerator enumerator, string deviceId)
+    {
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            try
+            {
+                var device = enumerator.GetDevice(deviceId);
+                if (device.State == DeviceState.Active && device.DataFlow == DataFlow.Render) return device;
+                device.Dispose();
+                Log.Info("Audio loopback: configured device is not active, using the default device");
+            }
+            catch (Exception ex)
+            {
+                Log.Info("Audio loopback: configured device not found, using the default device (" + ex.Message + ")");
+            }
+        }
+        return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+    }
+
+    /// <summary>Active audio output devices (ID, friendly name) for the settings UI. Never throws.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> GetRenderDevices()
+    {
+        var result = new List<KeyValuePair<string, string>>();
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            {
+                using (device)
+                {
+                    string name;
+                    try { name = device.FriendlyName; } catch { name = device.ID; }
+                    result.Add(new KeyValuePair<string, string>(device.ID, name));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("Could not enumerate audio output devices", ex);
+        }
+        return result;
     }
 
     private void PublishStatus(bool isWorking, string? message)

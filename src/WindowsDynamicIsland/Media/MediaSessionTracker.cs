@@ -255,7 +255,7 @@ internal sealed class MediaSessionTracker : IDisposable
 
             state = MapStatus(info.PlaybackStatus);
             var reportedRate = info.PlaybackRate;
-            rate = reportedRate is { } r && double.IsFinite(r) ? r : 1.0;
+            rate = reportedRate is { } r && double.IsFinite(r) && r > 0 ? r : 1.0;
             type = info.PlaybackType;
 
             var controls = info.Controls;
@@ -331,7 +331,7 @@ internal sealed class MediaSessionTracker : IDisposable
         if (duration == TimeSpan.Zero) relative = TimeSpan.Zero;
 
         var now = DateTimeOffset.UtcNow;
-        if (updatedAt == default || updatedAt.Year < 2000 || updatedAt > now + TimeSpan.FromMinutes(1))
+        if (updatedAt == default || updatedAt.Year < 2000 || updatedAt > now)
             updatedAt = now;
 
         lock (_dataLock)

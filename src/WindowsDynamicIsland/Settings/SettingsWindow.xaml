@@ -279,6 +279,18 @@
                                   SelectedValuePath="Value"
                                   SelectedValue="{Binding VisualizerStyle}" />
                     </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Источник звука"
+                                            Tag="Если вы используете виртуальный микшер (SteelSeries Sonar, Voicemeeter), выберите физическое устройство — на него приходит итоговый звук"
+                                            IsEnabled="{Binding VisualizerEnabled}">
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox Style="{StaticResource SettingsComboBox}" MinWidth="240" MaxWidth="320"
+                                      ItemsSource="{Binding AudioDeviceOptions}"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding VisualizerDeviceId}" />
+                            <Button Style="{StaticResource IconButton}" Content="&#xE72C;" Margin="8,0,0,0"
+                                    ToolTip="Обновить список устройств" Click="RefreshAudioDevices_Click" />
+                        </StackPanel>
+                    </HeaderedContentControl>
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Чувствительность" IsEnabled="{Binding VisualizerEnabled}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource SettingsValueText}" Text="{Binding VisualizerSensitivity, StringFormat='{}{0:0.0#}×'}" />

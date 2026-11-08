@@ -141,14 +141,15 @@ public sealed class FullscreenMonitor : IIslandModule
         if (quns == NativeMethods.QUNS_PRESENTATION_MODE) return (true, info.szDevice);
         if (!onTarget) return (false, info.szDevice);
 
-        if (quns is NativeMethods.QUNS_BUSY or NativeMethods.QUNS_RUNNING_D3D_FULL_SCREEN) return (true, info.szDevice);
-
+        // QUNS_BUSY / D3D states are system-wide hints and are also raised by background full-screen surfaces
+        // (e.g. animated-wallpaper engines). They only count when the FOREGROUND window really covers the monitor.
         if (!NativeMethods.IsWindowVisible(hwnd) || NativeMethods.IsIconic(hwnd)) return (false, info.szDevice);
         if (!NativeMethods.GetWindowRect(hwnd, out var rect)) return (false, info.szDevice);
 
         var m = info.rcMonitor;
         var covers = rect.Left <= m.Left && rect.Top <= m.Top && rect.Right >= m.Right && rect.Bottom >= m.Bottom;
         if (!covers) return (false, info.szDevice);
+        if (quns == NativeMethods.QUNS_RUNNING_D3D_FULL_SCREEN) return (true, info.szDevice);
 
         // A maximized captioned window overhangs the monitor by its borders when the taskbar auto-hides.
         var style = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_STYLE);

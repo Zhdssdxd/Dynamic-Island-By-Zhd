@@ -22,13 +22,16 @@
     <Product>Windows Dynamic Island</Product>
     <Company>Windows Dynamic Island</Company>
     <Description>Dynamic Island for Windows 10/11</Description>
+    <!-- Runs on the newest installed .NET runtime (8, 9, 10…) when .NET 8 itself is not installed. -->
+    <RollForward>LatestMajor</RollForward>
     <TieredPGO>true</TieredPGO>
     <ServerGarbageCollector>false</ServerGarbageCollector>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <InvariantGlobalization>false</InvariantGlobalization>
     <SatelliteResourceLanguages>en;ru</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <!-- WFAC010 is a WinForms-only analyzer about manifest DPI; this is a WPF app using PerMonitorV2 via the manifest. -->
+    <NoWarn>$(NoWarn);CA1416;WFAC010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
