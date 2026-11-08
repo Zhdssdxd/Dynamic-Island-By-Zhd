@@ -47,7 +47,6 @@
 
   <ItemGroup>
     <Resource Include="Assets\island.ico" />
-    <None Include="Assets\island.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
