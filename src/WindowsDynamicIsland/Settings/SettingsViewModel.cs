@@ -297,6 +297,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     private bool _expandOnHover;
+    private bool _pulseToBeat;
+    public bool PulseToBeat
+    {
+        get => _pulseToBeat;
+        set => Set(ref _pulseToBeat, value, (s, v) => s.Appearance.PulseToBeat = v);
+    }
+
     public bool ExpandOnHover
     {
         get => _expandOnHover;
@@ -691,6 +698,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             HorizontalOffset = a.HorizontalOffset;
             ShowWhenIdle = a.ShowWhenIdle;
             ExpandOnHover = a.ExpandOnHover;
+            PulseToBeat = a.PulseToBeat;
 
             var f = s.Features;
             NotificationsEnabled = f.NotificationsEnabled;

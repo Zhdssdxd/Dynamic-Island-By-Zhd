@@ -60,6 +60,8 @@ public sealed class AppearanceSettings
     public bool ShowWhenIdle { get; set; } = true;
     /// <summary>Expand on hover (after a short delay) in addition to click.</summary>
     public bool ExpandOnHover { get; set; }
+    /// <summary>When expanded with music/video playing, the bottom edge of the capsule bounces to the beat.</summary>
+    public bool PulseToBeat { get; set; } = true;
 }
 
 public sealed class FeatureSettings

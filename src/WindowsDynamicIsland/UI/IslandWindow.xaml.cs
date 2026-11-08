@@ -55,6 +55,16 @@ public partial class IslandWindow : Window
     private bool _closed;
     private string _placementSignature = "";
 
+    // Beat pulse (bottom edge bounces to the music while expanded).
+    private const double BeatMaxOffset = 7;
+    private const double BeatBreathing = 1.5;
+    private readonly float[] _beatBands = new float[32];
+    private IDisposable? _beatConsumer;
+    private bool _beatHooked;
+    private bool _beatWanted;
+    private double _beatOffset;
+    private double _bassAverage;
+
     public IslandWindow(IslandController controller, SettingsManager settings)
     {
         _controller = controller;
@@ -224,6 +234,9 @@ public partial class IslandWindow : Window
                 OnExpandedChanged();
                 UpdateLayoutForState(force: false);
                 break;
+            case nameof(IslandState.IsVisualizerActive):
+                UpdateBeatPulse();
+                break;
             case nameof(IslandState.Media):
             case nameof(IslandState.MediaSessions):
             case nameof(IslandState.Timer):
@@ -271,6 +284,7 @@ public partial class IslandWindow : Window
         _geometryInitialized = true;
 
         Capsule.IsHitTestVisible = kind != IslandViewKind.Hidden;
+        UpdateBeatPulse();
         if (kind is IslandViewKind.Hidden or IslandViewKind.Notification or IslandViewKind.Indicator) ResetHover();
 
         // Expanded via hotkey/tray (mouse elsewhere) → collapse on its own after a while.
@@ -358,12 +372,13 @@ public partial class IslandWindow : Window
 
     private void ApplyGeometry()
     {
+        var height = _height + _beatOffset;
         CapsuleHost.Width = _width;
-        CapsuleHost.Height = _height;
+        CapsuleHost.Height = height;
         var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
         Capsule.CornerRadius = new CornerRadius(r);
         var inner = Math.Max(0, r - 1);
-        _clip.Rect = new Rect(0, 0, Math.Max(0, _width - 2), Math.Max(0, _height - 2));
+        _clip.Rect = new Rect(0, 0, Math.Max(0, _width - 2), Math.Max(0, height - 2));
         _clip.RadiusX = inner;
         _clip.RadiusY = inner;
     }
@@ -379,6 +394,81 @@ public partial class IslandWindow : Window
         brush.Freeze();
         Capsule.Background = brush;
         CapsuleShadow.Opacity = 0.45 * a.Opacity;
+    }
+
+    // ───────────────────────────── Beat pulse ─────────────────────────────
+
+    /// <summary>
+    /// Starts/stops the beat pulse: only while the island is expanded on music or video, media is playing,
+    /// the visualizer (audio analysis) is enabled and the user did not switch the effect off.
+    /// The render hook stays alive just long enough for the offset to settle back to zero.
+    /// </summary>
+    private void UpdateBeatPulse()
+    {
+        var state = _controller.State;
+        var kind = _vm.ViewKind;
+        _beatWanted = !_closed
+                      && state.Settings.Appearance.PulseToBeat
+                      && state.IsVisualizerActive
+                      && kind is IslandViewKind.ExpandedMusic or IslandViewKind.ExpandedVideo;
+
+        if (_beatWanted)
+        {
+            if (_beatConsumer is null && ServiceRegistry.Get<ISpectrumSource>() is { } source)
+                _beatConsumer = source.AcquireConsumer();
+            HookBeat();
+        }
+        else
+        {
+            _beatConsumer?.Dispose();
+            _beatConsumer = null;
+            if (_beatOffset > 0.05) HookBeat();
+            else UnhookBeat();
+        }
+    }
+
+    private void HookBeat()
+    {
+        if (_beatHooked) return;
+        _beatHooked = true;
+        CompositionTarget.Rendering += OnBeatFrame;
+    }
+
+    private void UnhookBeat()
+    {
+        if (!_beatHooked) return;
+        _beatHooked = false;
+        CompositionTarget.Rendering -= OnBeatFrame;
+    }
+
+    /// <summary>
+    /// Per frame: bass energy (lowest bands, ~40–150 Hz) vs. its running average. A jump above the average is a beat
+    /// and kicks the bottom edge down (fast attack); between beats it relaxes smoothly and "breathes" with the bass.
+    /// </summary>
+    private void OnBeatFrame(object? sender, EventArgs e)
+    {
+        double target = 0;
+        if (_beatWanted && ServiceRegistry.Get<ISpectrumSource>() is { } source && source.TryGetBands(_beatBands, out _))
+        {
+            var bass = (_beatBands[0] + _beatBands[1] + _beatBands[2] + _beatBands[3] + _beatBands[4]) / 5.0;
+            _bassAverage += (bass - _bassAverage) * 0.05;
+            var kick = Math.Clamp((bass - _bassAverage * 1.08) / 0.22, 0, 1);
+            target = BeatMaxOffset * kick + BeatBreathing * bass;
+        }
+
+        var speed = AnimationEngine.Instance.SpeedMultiplier;
+        var k = target > _beatOffset ? 0.55 : 0.10;
+        _beatOffset += (target - _beatOffset) * Math.Min(1, k * speed);
+
+        if (!_beatWanted && _beatOffset < 0.05)
+        {
+            _beatOffset = 0;
+            _bassAverage = 0;
+            ApplyGeometry();
+            UnhookBeat();
+            return;
+        }
+        ApplyGeometry();
     }
 
     // ───────────────────────────── Mouse interaction ─────────────────────────────
@@ -508,6 +598,10 @@ public partial class IslandWindow : Window
         _controller.State.PropertyChanged -= OnStatePropertyChanged;
         _collapseTimer.Stop();
         _hoverExpandTimer.Stop();
+        _beatWanted = false;
+        UnhookBeat();
+        _beatConsumer?.Dispose();
+        _beatConsumer = null;
         foreach (var key in new[] { WidthKey, HeightKey, RadiusKey, OpacityKey, HoverKey })
             AnimationEngine.Instance.Stop(key);
         if (_winEventHook != IntPtr.Zero)

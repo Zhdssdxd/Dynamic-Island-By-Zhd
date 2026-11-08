@@ -52,7 +52,7 @@
                 <Grid x:Name="ClipHost">
                     <anim:MorphContentControl x:Name="ContentHost"
                                               HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
+                                              VerticalAlignment="Top"
                                               Focusable="False"
                                               Transition="ScaleFade"
                                               Duration="0:0:0.26" />
