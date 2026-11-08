@@ -1,0 +1,63 @@
+<Window x:Class="WindowsDynamicIsland.UI.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:WindowsDynamicIsland.Animation"
+        Title="Dynamic Island"
+        Width="{StaticResource IslandHostWidth}"
+        Height="{StaticResource IslandHostHeight}"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        Focusable="False"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="Grayscale"
+        TextOptions.TextFormattingMode="Ideal"
+        FontFamily="{StaticResource UiFont}">
+    <!--
+        The host window never resizes: it is a fixed transparent canvas (fully transparent pixels of a
+        layered window are click-through). Only the capsule inside morphs, driven by spring physics.
+    -->
+    <Grid x:Name="HostRoot" Background="Transparent">
+        <Grid x:Name="CapsuleHost"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Top"
+              Margin="0,8,0,0"
+              RenderTransformOrigin="0.5,0">
+            <Grid.RenderTransform>
+                <ScaleTransform x:Name="HoverScale" ScaleX="1" ScaleY="1" />
+            </Grid.RenderTransform>
+
+            <Border x:Name="Capsule"
+                    Background="{StaticResource IslandBrush}"
+                    BorderBrush="{StaticResource StrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="17">
+                <Border.Effect>
+                    <DropShadowEffect x:Name="CapsuleShadow"
+                                      BlurRadius="22"
+                                      ShadowDepth="3"
+                                      Direction="270"
+                                      Opacity="0.45"
+                                      RenderingBias="Performance"
+                                      Color="{StaticResource ShadowColor}" />
+                </Border.Effect>
+
+                <!-- Rounded clip that follows the animated geometry, so content never spills during morphs. -->
+                <Grid x:Name="ClipHost">
+                    <anim:MorphContentControl x:Name="ContentHost"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Focusable="False"
+                                              Transition="ScaleFade"
+                                              Duration="0:0:0.26" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,10 @@
+<UserControl x:Class="WindowsDynamicIsland.UI.Views.IdleView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
+             xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
+             xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+    <!-- The idle pill is intentionally empty: pure black capsule, like the iPhone camera cut-out. -->
+    <Grid />
+</UserControl>

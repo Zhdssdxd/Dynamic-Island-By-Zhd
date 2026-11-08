@@ -1,0 +1,78 @@
+<UserControl x:Class="WindowsDynamicIsland.UI.Views.ExpandedVideoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
+             xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
+             xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+    <Grid Margin="{StaticResource ExpandedPadding}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Height="72">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 16:9 thumbnail. -->
+            <c:ArtworkImage Width="112" Height="63"
+                            VerticalAlignment="Center"
+                            CornerRadius="10"
+                            Stretch="UniformToFill"
+                            Source="{Binding Thumbnail}"
+                            IsPaused="{Binding IsMediaPaused}"
+                            FallbackGlyph="{x:Static m:Glyphs.Video}"
+                            GlyphSize="20" />
+
+            <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource SubtitleText}"
+                           TextWrapping="Wrap"
+                           MaxHeight="38"
+                           LineHeight="19"
+                           LineStackingStrategy="BlockLineHeight"
+                           Text="{Binding MediaTitle}"
+                           Visibility="{Binding MediaTitle, Converter={StaticResource HasValueToVisibility}}" />
+                <TextBlock Margin="0,2,0,0" Style="{StaticResource CaptionText}" Text="{Binding MediaSourceName}"
+                           Visibility="{Binding MediaSourceName, Converter={StaticResource HasValueToVisibility}}" />
+                <StackPanel Margin="0,3,0,0" Orientation="Horizontal"
+                            Visibility="{Binding MediaStateText, Converter={StaticResource HasValueToVisibility}}">
+                    <audio:VisualizerControl Width="14" Height="10" Margin="0,0,6,0" VerticalAlignment="Center"
+                                             Mode="MinimalBars" BarCount="3"
+                                             IsActive="{Binding State.IsVisualizerActive}"
+                                             BarBrush="{StaticResource AccentGreenBrush}"
+                                             Visibility="{Binding ShowPlayingBars, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource TertiaryCaptionText}" Text="{Binding MediaStateText}" />
+                </StackPanel>
+            </StackPanel>
+
+            <Button Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource PlayButtonStyle}"
+                    Content="{Binding PlayPauseGlyph}"
+                    Command="{Binding PlayPauseCommand}"
+                    ToolTip="Воспроизведение / пауза" />
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,10,0,0" Height="16"
+              Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="42" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="42" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource TabularCaptionText}" VerticalAlignment="Center" Text="{Binding ElapsedText}" />
+            <c:ProgressLine Grid.Column="1" Height="16" VerticalAlignment="Center"
+                            Value="{Binding MediaProgress}"
+                            FillBrush="{StaticResource FillBrush}"
+                            TrackBrush="{StaticResource TrackBrush}"
+                            IsSeekable="{Binding CanSeek}"
+                            SeekCommand="{Binding SeekCommand}" />
+            <TextBlock Grid.Column="2" Style="{StaticResource TabularCaptionText}" VerticalAlignment="Center"
+                       HorizontalAlignment="Right" Text="{Binding RemainingText}" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,53 @@
+<UserControl x:Class="WindowsDynamicIsland.UI.Views.CompactTimerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
+             xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
+             xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+    <Grid Margin="{StaticResource CompactPadding}" VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Countdown: draining orange ring. Stopwatch: orange stopwatch glyph. -->
+        <Grid Width="20" Height="20" VerticalAlignment="Center">
+            <c:ProgressRing Value="{Binding TimerFraction}"
+                            RingThickness="2.5"
+                            FillBrush="{StaticResource AccentOrangeBrush}"
+                            TrackBrush="{StaticResource AccentOrangeSoftBrush}"
+                            Visibility="{Binding IsCountdown, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock Style="{StaticResource GlyphText}"
+                       FontSize="{StaticResource IconSizeSmall}"
+                       Foreground="{StaticResource AccentOrangeBrush}"
+                       Text="{x:Static m:Glyphs.Stopwatch}"
+                       Visibility="{Binding IsCountdown, Converter={StaticResource InverseBoolToVisibility}}" />
+        </Grid>
+
+        <TextBlock Grid.Column="2"
+                   Margin="0,0,10,0"
+                   Style="{StaticResource GlyphText}"
+                   FontSize="{StaticResource IconSizeSmall}"
+                   Text="{Binding SecondaryActivityGlyph}"
+                   Foreground="{Binding SecondaryActivityBrush}"
+                   Visibility="{Binding HasSecondaryActivity, Converter={StaticResource BoolToVisibility}}" />
+
+        <TextBlock Grid.Column="3"
+                   VerticalAlignment="Center"
+                   Foreground="{StaticResource AccentOrangeBrush}"
+                   Text="{Binding TimerText}">
+            <TextBlock.Style>
+                <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource CompactDigitsText}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsTimerPaused}" Value="True">
+                            <Setter Property="Opacity" Value="0.55" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+    </Grid>
+</UserControl>

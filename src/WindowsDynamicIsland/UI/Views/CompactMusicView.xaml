@@ -1,0 +1,47 @@
+<UserControl x:Class="WindowsDynamicIsland.UI.Views.CompactMusicView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
+             xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
+             xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+    <Grid Margin="{StaticResource CompactPadding}" VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Album art, left "ear" of the island. -->
+        <c:ArtworkImage Width="22" Height="22"
+                        CornerRadius="6"
+                        Source="{Binding Thumbnail}"
+                        IsPaused="{Binding IsMediaPaused}"
+                        FallbackGlyph="{x:Static m:Glyphs.Music}"
+                        GlyphSize="11" />
+
+        <!-- Second live activity (e.g. a running download) as a tiny badge. -->
+        <TextBlock Grid.Column="2"
+                   Margin="0,0,10,0"
+                   Style="{StaticResource GlyphText}"
+                   FontSize="{StaticResource IconSizeSmall}"
+                   Text="{Binding SecondaryActivityGlyph}"
+                   Foreground="{Binding SecondaryActivityBrush}"
+                   Visibility="{Binding HasSecondaryActivity, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- Right "ear": live bars, or a pause glyph when the visualizer is off. -->
+        <Grid Grid.Column="3" Width="26" Height="18" VerticalAlignment="Center">
+            <audio:VisualizerControl Mode="MinimalBars"
+                                     IsActive="{Binding State.IsVisualizerActive}"
+                                     BarBrush="{Binding AccentBrush}"
+                                     Opacity="{Binding VisualizerOpacity}"
+                                     Visibility="{Binding State.Settings.Features.VisualizerEnabled, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock Style="{StaticResource GlyphText}"
+                       FontSize="{StaticResource IconSizeSmall}"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Text="{Binding PlaybackStateGlyph}"
+                       Visibility="{Binding State.Settings.Features.VisualizerEnabled, Converter={StaticResource InverseBoolToVisibility}}" />
+        </Grid>
+    </Grid>
+</UserControl>

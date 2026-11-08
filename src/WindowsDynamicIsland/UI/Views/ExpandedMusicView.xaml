@@ -1,0 +1,102 @@
+<UserControl x:Class="WindowsDynamicIsland.UI.Views.ExpandedMusicView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
+             xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
+             xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+    <Grid Margin="{StaticResource ExpandedPadding}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="56" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ── Row 0: artwork · title/artist/source · visualizer ── -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="56" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <c:ArtworkImage Width="56" Height="56"
+                            CornerRadius="12"
+                            Source="{Binding Thumbnail}"
+                            IsPaused="{Binding IsMediaPaused}"
+                            FallbackGlyph="{x:Static m:Glyphs.Music}"
+                            GlyphSize="22" />
+
+            <StackPanel Grid.Column="1" Margin="12,1,10,0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource TitleText}" Text="{Binding MediaTitle}"
+                           Visibility="{Binding MediaTitle, Converter={StaticResource HasValueToVisibility}}" />
+                <TextBlock Margin="0,1,0,0" Style="{StaticResource BodyText}" Text="{Binding MediaArtist}"
+                           Visibility="{Binding MediaArtist, Converter={StaticResource HasValueToVisibility}}" />
+                <TextBlock Margin="0,3,0,0" Style="{StaticResource TertiaryCaptionText}" Text="{Binding MediaSourceName}"
+                           Visibility="{Binding ShowSourceLabel, Converter={StaticResource BoolToVisibility}}" />
+
+                <!-- Session switcher when several apps play media. -->
+                <ItemsControl Margin="-1,4,0,0"
+                              ItemsSource="{Binding SessionChips}"
+                              Focusable="False"
+                              Visibility="{Binding HasMultipleSessions, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type ui:SessionChip}">
+                            <Button Style="{StaticResource SessionChipStyle}"
+                                    Content="{Binding Label}"
+                                    ToolTip="{Binding Label}"
+                                    Command="{Binding DataContext.SelectSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                    CommandParameter="{Binding SessionId}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <audio:VisualizerControl Grid.Column="2"
+                                     Width="34" Height="22"
+                                     VerticalAlignment="Top"
+                                     Margin="0,4,0,0"
+                                     Mode="{Binding State.Settings.Features.VisualizerStyle}"
+                                     IsActive="{Binding State.IsVisualizerActive}"
+                                     BarBrush="{Binding AccentBrush}"
+                                     Opacity="{Binding VisualizerOpacity}"
+                                     Visibility="{Binding State.Settings.Features.VisualizerEnabled, Converter={StaticResource BoolToVisibility}}" />
+        </Grid>
+
+        <!-- ── Row 1: timeline (only when the source reports one) ── -->
+        <Grid Grid.Row="1" Margin="0,10,0,0" Height="16"
+              Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="42" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="42" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource TabularCaptionText}" VerticalAlignment="Center" Text="{Binding ElapsedText}" />
+            <c:ProgressLine Grid.Column="1"
+                            Height="16"
+                            VerticalAlignment="Center"
+                            Value="{Binding MediaProgress}"
+                            FillBrush="{Binding AccentBrush}"
+                            TrackBrush="{StaticResource TrackBrush}"
+                            IsSeekable="{Binding CanSeek}"
+                            SeekCommand="{Binding SeekCommand}" />
+            <TextBlock Grid.Column="2" Style="{StaticResource TabularCaptionText}" VerticalAlignment="Center"
+                       HorizontalAlignment="Right" Text="{Binding RemainingText}" />
+        </Grid>
+
+        <!-- ── Row 2: transport ── -->
+        <StackPanel Grid.Row="2" Margin="0,4,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Style="{StaticResource TransportButtonStyle}" Content="{x:Static m:Glyphs.Previous}"
+                    Command="{Binding PreviousCommand}" ToolTip="Предыдущий" />
+            <Button Margin="14,0" Style="{StaticResource PlayButtonStyle}" Content="{Binding PlayPauseGlyph}"
+                    Command="{Binding PlayPauseCommand}" ToolTip="Воспроизведение / пауза" />
+            <Button Style="{StaticResource TransportButtonStyle}" Content="{x:Static m:Glyphs.Next}"
+                    Command="{Binding NextCommand}" ToolTip="Следующий" />
+        </StackPanel>
+    </Grid>
+</UserControl>
