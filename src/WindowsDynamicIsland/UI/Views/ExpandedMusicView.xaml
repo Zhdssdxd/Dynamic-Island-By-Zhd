@@ -4,16 +4,18 @@
              xmlns:c="clr-namespace:WindowsDynamicIsland.UI.Components"
              xmlns:audio="clr-namespace:WindowsDynamicIsland.Audio"
              xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
-             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI">
+             xmlns:ui="clr-namespace:WindowsDynamicIsland.UI"
+             xmlns:anim="clr-namespace:WindowsDynamicIsland.Animation">
     <Grid Margin="{StaticResource ExpandedPadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="56" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Soft audio-reactive wave along the bottom of the capsule (background layer, never takes clicks). -->
-        <audio:VisualizerControl Grid.RowSpan="3"
+        <audio:VisualizerControl Grid.RowSpan="4"
                                  Height="46"
                                  Margin="-18,0,-18,-14"
                                  VerticalAlignment="Bottom"
@@ -80,8 +82,28 @@
                                      Visibility="{Binding State.Settings.Features.VisualizerEnabled, Converter={StaticResource BoolToVisibility}}" />
         </Grid>
 
-        <!-- ── Row 1: timeline (only when the source reports one) ── -->
-        <Grid Grid.Row="1" Margin="0,10,0,0" Height="16"
+        <!-- ── Row 1: synchronized lyrics (lrclib.net), current line slides in, next line dimmed ── -->
+        <StackPanel Grid.Row="1" Margin="0,10,0,0" Height="38"
+                    Visibility="{Binding HasLyrics, Converter={StaticResource BoolToVisibility}}">
+            <anim:MorphContentControl Height="20"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Left"
+                                      ClipToBounds="True"
+                                      Content="{Binding CurrentLyric}"
+                                      TransitionKey="{Binding CurrentLyricIndex}"
+                                      Transition="SlideUp"
+                                      Duration="0:0:0.32">
+                <anim:MorphContentControl.ContentTemplate>
+                    <DataTemplate>
+                        <TextBlock Style="{StaticResource SubtitleText}" Text="{Binding}" />
+                    </DataTemplate>
+                </anim:MorphContentControl.ContentTemplate>
+            </anim:MorphContentControl>
+            <TextBlock Margin="0,2,0,0" Style="{StaticResource TertiaryCaptionText}" FontSize="12" Text="{Binding NextLyric}" />
+        </StackPanel>
+
+        <!-- ── Row 2: timeline (only when the source reports one) ── -->
+        <Grid Grid.Row="2" Margin="0,10,0,0" Height="16"
               Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="42" />
@@ -101,8 +123,8 @@
                        HorizontalAlignment="Right" Text="{Binding RemainingText}" />
         </Grid>
 
-        <!-- ── Row 2: transport ── -->
-        <StackPanel Grid.Row="2" Margin="0,4,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
+        <!-- ── Row 3: transport ── -->
+        <StackPanel Grid.Row="3" Margin="0,4,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Style="{StaticResource TransportButtonStyle}" Content="{x:Static m:Glyphs.Previous}"
                     Command="{Binding PreviousCommand}" ToolTip="Предыдущий" />
             <Button Margin="14,0" Style="{StaticResource PlayButtonStyle}" Content="{Binding PlayPauseGlyph}"

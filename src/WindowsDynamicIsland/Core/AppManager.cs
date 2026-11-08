@@ -61,6 +61,7 @@ public sealed class AppManager : IAsyncDisposable
         ServiceRegistry.Register<ISpectrumSource>(audio);
 
         _modules.Register(new MediaManager(_bus, _settings));
+        _modules.Register(new LyricsProvider(_bus, _settings));
         _modules.Register(audio);
         _modules.Register(new NotificationManager(_bus, _settings));
         _modules.Register(new VolumeMonitor(_bus, _settings));

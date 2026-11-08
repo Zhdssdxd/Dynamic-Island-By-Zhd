@@ -56,6 +56,8 @@ public static class IslandLayout
     // ── Expanded.
     public static readonly Size ExpandedMusicSize = new(400, 164);
     public static readonly Size ExpandedMusicNoTimelineSize = new(400, 136);
+    /// <summary>Extra height of the expanded music view when synchronized lyrics are shown.</summary>
+    public const double LyricsExtraHeight = 48;
     public static readonly Size ExpandedVideoSize = new(400, 128);
     public static readonly Size ExpandedVideoNoTimelineSize = new(400, 100);
     public static readonly Size ExpandedTimerCountdownSize = new(340, 116);
@@ -120,7 +122,8 @@ public static class IslandLayout
         or IslandViewKind.CompactVideo or IslandViewKind.CompactTimer or IslandViewKind.CompactDownload;
 
     /// <summary>Target geometry for a view. <paramref name="notificationHeight"/> measures a notification banner.</summary>
-    public static IslandGeometry Measure(IslandViewKind kind, IslandState s, Func<IslandNotification, double>? notificationHeight = null)
+    public static IslandGeometry Measure(IslandViewKind kind, IslandState s, Func<IslandNotification, double>? notificationHeight = null,
+        bool hasLyrics = false)
     {
         var a = s.Settings.Appearance;
         var cw = a.CompactWidth;
@@ -152,6 +155,7 @@ public static class IslandLayout
                 break;
             case IslandViewKind.ExpandedMusic:
                 size = s.Media is { HasTimeline: true } ? ExpandedMusicSize : ExpandedMusicNoTimelineSize;
+                if (hasLyrics) size = new Size(size.Width, size.Height + LyricsExtraHeight);
                 break;
             case IslandViewKind.ExpandedVideo:
                 size = s.Media is { HasTimeline: true } ? ExpandedVideoSize : ExpandedVideoNoTimelineSize;

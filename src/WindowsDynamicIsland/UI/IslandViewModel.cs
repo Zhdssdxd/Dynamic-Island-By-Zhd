@@ -31,6 +31,8 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     private const string Nbsp = " ";
 
     private readonly IEventBus _bus;
+    private readonly IDisposable _lyricsSub;
+    private LyricsChanged? _lyrics;
     private readonly DispatcherTimer _ticker;
     private bool _disposed;
 
@@ -44,6 +46,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     public IslandViewModel(IslandController controller)
     {
         _bus = controller.Bus;
+        _lyricsSub = _bus.Subscribe<LyricsChanged>(OnLyrics, onUiThread: true);
         State = controller.State;
 
         _white = Res("TextPrimaryBrush", Colors.White);
@@ -167,6 +170,21 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     public IReadOnlyList<SessionChip> SessionChips { get => _sessionChips; private set => SetProperty(ref _sessionChips, value); }
     public bool HasMultipleSessions { get => _hasMultipleSessions; private set => SetProperty(ref _hasMultipleSessions, value); }
     public bool ShowSourceLabel { get => _showSourceLabel; private set => SetProperty(ref _showSourceLabel, value); }
+
+    // ───────────────────────────── Lyrics ─────────────────────────────
+
+    private bool _hasLyrics;
+    private string _currentLyric = "";
+    private string _nextLyric = "";
+    private int _currentLyricIndex = -1;
+
+    /// <summary>Synchronized lyrics are available for the displayed track (and it has a timeline to sync to).</summary>
+    public bool HasLyrics { get => _hasLyrics; private set => SetProperty(ref _hasLyrics, value); }
+    /// <summary>Line being sung now ("♪" in instrumental gaps).</summary>
+    public string CurrentLyric { get => _currentLyric; private set => SetProperty(ref _currentLyric, value); }
+    public string NextLyric { get => _nextLyric; private set => SetProperty(ref _nextLyric, value); }
+    /// <summary>Changes on every new line — drives the line-change animation.</summary>
+    public int CurrentLyricIndex { get => _currentLyricIndex; private set => SetProperty(ref _currentLyricIndex, value); }
 
     // ───────────────────────────── Timer ─────────────────────────────
 
@@ -440,6 +458,37 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         CommandManager.InvalidateRequerySuggested();
     }
 
+    private void OnLyrics(LyricsChanged e)
+    {
+        if (_disposed) return;
+        _lyrics = e;
+        RefreshMediaProgress(DateTimeOffset.UtcNow);
+    }
+
+    private void RefreshLyrics(MediaSessionInfo? m, TimeSpan position)
+    {
+        var l = _lyrics;
+        var usable = m is { HasTimeline: true } && l is { Status: LyricsStatus.Found, Lines.Count: > 0 }
+                     && l.TrackKey == WindowsDynamicIsland.Media.LyricsProvider.TrackKey(m)
+                     && State.Settings.Features.LyricsEnabled;
+        if (!usable)
+        {
+            HasLyrics = false;
+            CurrentLyricIndex = -1;
+            CurrentLyric = "";
+            NextLyric = "";
+            return;
+        }
+
+        var lines = l!.Lines;
+        // Show a line a touch early: GSMTC positions lag slightly behind the audio.
+        var index = WindowsDynamicIsland.Media.LrcParser.IndexAt(lines, position + TimeSpan.FromMilliseconds(250));
+        CurrentLyric = index < 0 ? "♪" : (lines[index].Text.Length > 0 ? lines[index].Text : "♪");
+        NextLyric = index + 1 < lines.Count ? lines[index + 1].Text : "";
+        CurrentLyricIndex = index;
+        HasLyrics = true;
+    }
+
     private void RefreshMediaProgress(DateTimeOffset now)
     {
         var m = State.Media;
@@ -448,10 +497,12 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
             MediaProgress = 0;
             ElapsedText = "";
             RemainingText = "";
+            RefreshLyrics(m, TimeSpan.Zero);
             return;
         }
 
         var pos = m.GetEstimatedPosition(now);
+        RefreshLyrics(m, pos);
         var duration = m.Duration;
         MediaProgress = duration.Ticks > 0 ? Math.Clamp((double)pos.Ticks / duration.Ticks, 0, 1) : 0;
         var elapsed = TimeSpan.FromSeconds(Math.Floor(pos.TotalSeconds));
@@ -701,6 +752,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _ticker.Stop();
+        _lyricsSub.Dispose();
         State.PropertyChanged -= OnStatePropertyChanged;
     }
 }

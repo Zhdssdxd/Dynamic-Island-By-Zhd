@@ -375,6 +375,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(ref _videoMode, value, (s, v) => s.Features.VideoModeEnabled = v);
     }
 
+    private bool _lyricsEnabled;
+    public bool LyricsEnabled
+    {
+        get => _lyricsEnabled;
+        set => Set(ref _lyricsEnabled, value, (s, v) => s.Features.LyricsEnabled = v);
+    }
+
     private bool _visualizerEnabled;
     public bool VisualizerEnabled
     {
@@ -690,6 +697,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             NotificationDuration = f.NotificationDurationSeconds;
             MusicMode = f.MusicModeEnabled;
             VideoMode = f.VideoModeEnabled;
+            LyricsEnabled = f.LyricsEnabled;
             VisualizerEnabled = f.VisualizerEnabled;
             VisualizerStyle = f.VisualizerStyle;
             VisualizerDeviceId = f.VisualizerDeviceId;

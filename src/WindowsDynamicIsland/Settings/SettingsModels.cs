@@ -69,6 +69,8 @@ public sealed class FeatureSettings
     public double NotificationDurationSeconds { get; set; } = 5;
     public bool MusicModeEnabled { get; set; } = true;
     public bool VideoModeEnabled { get; set; } = true;
+    /// <summary>Show synchronized lyrics (from lrclib.net) in the expanded music view.</summary>
+    public bool LyricsEnabled { get; set; } = true;
     public bool VisualizerEnabled { get; set; } = true;
     public VisualizerStyle VisualizerStyle { get; set; } = VisualizerStyle.MinimalBars;
     /// <summary>Visualizer sensitivity multiplier 0.5..2.</summary>

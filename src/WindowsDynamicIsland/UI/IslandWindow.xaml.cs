@@ -207,7 +207,8 @@ public partial class IslandWindow : Window
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IslandViewModel.ViewKind)) UpdateLayoutForState(force: false);
+        if (e.PropertyName is nameof(IslandViewModel.ViewKind) or nameof(IslandViewModel.HasLyrics))
+            UpdateLayoutForState(force: false);
     }
 
     private void OnStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -245,7 +246,7 @@ public partial class IslandWindow : Window
         var state = _controller.State;
         var kind = _vm.ViewKind;
         var key = IslandLayout.ViewKey(kind, state);
-        var target = IslandLayout.Measure(kind, state, MeasureNotification);
+        var target = IslandLayout.Measure(kind, state, MeasureNotification, _vm.HasLyrics);
 
         var previousKind = _currentKind;
         var contentChanged = force || key != _currentKey;

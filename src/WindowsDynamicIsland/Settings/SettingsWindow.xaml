@@ -268,6 +268,11 @@
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Видео" Tag="Браузеры и видеоплееры">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding VideoMode}" />
                     </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Текст песни"
+                                            Tag="Синхронизированный текст в раскрытом острове. Название и исполнитель трека отправляются на lrclib.net"
+                                            IsEnabled="{Binding MusicMode}">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding LyricsEnabled}" />
+                    </HeaderedContentControl>
 
                     <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Визуализатор звука" />
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Визуализатор" Tag="Анализирует звук, который воспроизводит компьютер">
