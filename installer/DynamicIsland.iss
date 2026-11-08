@@ -4,7 +4,7 @@
 
 #define AppName      "Dynamic Island"
 #define AppVersion   "1.0.0"
-#define AppPublisher "Windows Dynamic Island"
+#define AppPublisher "Zhd"
 #define AppExe       "DynamicIsland.exe"
 #define RunValue     "WindowsDynamicIsland"
 

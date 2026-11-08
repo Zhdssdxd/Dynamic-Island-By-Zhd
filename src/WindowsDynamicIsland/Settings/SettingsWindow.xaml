@@ -580,7 +580,7 @@
                                        FontFamily="{StaticResource DisplayFont}" FontSize="22" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}" />
                             <TextBlock Style="{StaticResource SettingsCaptionText}" Margin="0,4,0,0">
-                                <Run Text="Версия " /><Run Text="{Binding AppVersion, Mode=OneWay}" />
+                                <Run Text="Версия " /><Run Text="{Binding AppVersion, Mode=OneWay}" /><Run Text=" · Автор: Zhd · Лицензия MIT" />
                             </TextBlock>
                             <TextBlock Style="{StaticResource SettingsBodyText}" Margin="0,14,0,0" Foreground="{StaticResource TextSecondaryBrush}"
                                        Text="«Живой остров» в верхней части экрана для Windows 10 и 11: музыка и видео, уведомления, таймеры, загрузки и системные индикаторы — в одной аккуратной капсуле." />

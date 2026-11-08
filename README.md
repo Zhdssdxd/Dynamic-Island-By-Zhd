@@ -1,5 +1,7 @@
 # Windows Dynamic Island
 
+**Автор: Zhd** · Лицензия: [MIT](LICENSE)
+
 Dynamic Island для Windows 10 и 11: чёрная капсула вверху экрана, которая плавно меняет форму и
 содержимое в зависимости от того, что происходит в системе — музыка, видео, уведомления, громкость,
 таймер, загрузки, подключение устройств.
@@ -121,3 +123,7 @@ docs/CONTRACTS.md                   контракты между модулям
 
 * Настройки: `%AppData%\WindowsDynamicIsland\settings.json`
 * Логи: `%LocalAppData%\WindowsDynamicIsland\logs\app.log`
+
+## Лицензия
+
+MIT © 2026 Zhd — см. [LICENSE](LICENSE).

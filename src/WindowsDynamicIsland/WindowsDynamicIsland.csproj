@@ -20,7 +20,9 @@
     <ApplicationIcon>Assets\island.ico</ApplicationIcon>
     <Version>1.0.0</Version>
     <Product>Windows Dynamic Island</Product>
-    <Company>Windows Dynamic Island</Company>
+    <Company>Zhd</Company>
+    <Authors>Zhd</Authors>
+    <Copyright>Copyright © 2026 Zhd</Copyright>
     <Description>Dynamic Island for Windows 10/11</Description>
     <!-- Runs on the newest installed .NET runtime (8, 9, 10…) when .NET 8 itself is not installed. -->
     <RollForward>LatestMajor</RollForward>
