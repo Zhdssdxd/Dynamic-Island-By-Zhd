@@ -280,7 +280,7 @@
                                   SelectedValue="{Binding VisualizerStyle}" />
                     </HeaderedContentControl>
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Источник звука"
-                                            Tag="Если вы используете виртуальный микшер (SteelSeries Sonar, Voicemeeter), выберите физическое устройство — на него приходит итоговый звук"
+                                            Tag="Авто следует за устройством, на котором сейчас звучит музыка"
                                             IsEnabled="{Binding VisualizerEnabled}">
                         <StackPanel Orientation="Horizontal">
                             <ComboBox Style="{StaticResource SettingsComboBox}" MinWidth="240" MaxWidth="320"

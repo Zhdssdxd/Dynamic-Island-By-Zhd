@@ -78,6 +78,13 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
     private long _lastReleaseTimestamp;
     private int _restartFlag;
     private volatile string _deviceId = "";
+    /// <summary>Auto mode: endpoint picked because sound was actually playing there (null = default device).</summary>
+    private volatile string? _autoDeviceId;
+    /// <summary>Stopwatch timestamp of the last non-silent capture packet.</summary>
+    private long _lastSignalTimestamp;
+    private System.Threading.Timer? _autoWatch;
+    private const double AutoSwitchSilenceSeconds = 1.5;
+    private const float AudiblePeak = 0.002f;
     private long _scheduledDue = long.MaxValue;
 
     private bool _faulted;     // _failureGate
@@ -382,7 +389,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         CaptureSession? session = null;
         try
         {
-            device = ResolveCaptureDevice(enumerator, _deviceId);
+            device = ResolveCaptureDevice(enumerator, string.IsNullOrEmpty(_deviceId) ? _autoDeviceId ?? "" : _deviceId);
             capture = new WasapiLoopbackCapture(device);
 
             var converter = SampleConverter.TryCreate(capture.WaveFormat, out var formatError);
@@ -401,6 +408,12 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
             _isCapturing = true;
 
             Log.Info($"Audio loopback capture started: {deviceName} ({converter.Description})");
+            Interlocked.Exchange(ref _lastSignalTimestamp, Stopwatch.GetTimestamp());
+            if (string.IsNullOrEmpty(_deviceId))
+            {
+                _autoWatch?.Dispose();
+                _autoWatch = new System.Threading.Timer(OnAutoWatch, null, 1000, 1000);
+            }
             _bus.Publish(new AudioCaptureStateChanged(true, null));
             PublishStatus(true, null);
         }
@@ -443,6 +456,8 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
 
         _session = null;
         _isCapturing = false;
+        _autoWatch?.Dispose();
+        _autoWatch = null;
         session.Shutdown();
         ResetFrontBuffer();
 
@@ -539,6 +554,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         {
             // Another endpoint was chosen: restart capture on it (if capturing).
             _deviceId = deviceId;
+            _autoDeviceId = null;
             ResetFailures();
             Interlocked.Exchange(ref _restartFlag, 1);
             ScheduleReconcile(0);
@@ -551,6 +567,72 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
         if (enabled) ResetFailures();
         if (_running) PublishStatus(true, enabled ? null : DisabledMessage);
         ScheduleReconcile(0);
+    }
+
+    /// <summary>Capture thread: remembers that real (non-silent) audio arrived.</summary>
+    private void NoteSignal(long timestamp) => Interlocked.Exchange(ref _lastSignalTimestamp, timestamp);
+
+    /// <summary>
+    /// Auto mode watchdog (thread pool, 1 Hz, only while capturing with no device chosen).
+    /// Virtual mixers such as SteelSeries Sonar or Voicemeeter route apps to different endpoints, so the default
+    /// device can be silent while music plays elsewhere. When the captured endpoint has been silent for a moment and
+    /// another endpoint's peak meter shows sound, capture moves there.
+    /// </summary>
+    private void OnAutoWatch(object? state)
+    {
+        try
+        {
+            if (IsDisposed || !string.IsNullOrEmpty(_deviceId)) return;
+            var session = _session;
+            if (session is null) return;
+
+            var silentFor = (Stopwatch.GetTimestamp() - Interlocked.Read(ref _lastSignalTimestamp)) * TicksToSeconds;
+            if (silentFor < AutoSwitchSilenceSeconds) return;
+
+            string currentId;
+            try { currentId = session.Device.ID; } catch { return; }
+
+            var loudest = FindLoudestRenderDevice(currentId);
+            if (loudest is null) return;
+
+            Log.Info($"Audio loopback: '{loudest.Value.Name}' is playing while the captured device is silent — switching");
+            _autoDeviceId = loudest.Value.Id;
+            Interlocked.Exchange(ref _restartFlag, 1);
+            ScheduleReconcile(0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("Audio auto-device watchdog failed: " + ex.Message);
+        }
+    }
+
+    /// <summary>Active render endpoint (other than <paramref name="excludeId"/>) with the highest audible peak, if any.</summary>
+    private static (string Id, string Name)? FindLoudestRenderDevice(string excludeId)
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        (string Id, string Name)? best = null;
+        var bestPeak = AudiblePeak;
+        foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        {
+            using (device)
+            {
+                try
+                {
+                    if (string.Equals(device.ID, excludeId, StringComparison.OrdinalIgnoreCase)) continue;
+                    var peak = device.AudioMeterInformation.MasterPeakValue;
+                    if (peak > bestPeak)
+                    {
+                        bestPeak = peak;
+                        best = (device.ID, TryGetFriendlyName(device));
+                    }
+                }
+                catch
+                {
+                    // Endpoint vanished or has no meter: skip.
+                }
+            }
+        }
+        return best;
     }
 
     /// <summary>
@@ -803,6 +885,15 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
                 if (count <= 0) return;
 
                 var now = Stopwatch.GetTimestamp();
+                for (var i = 0; i < count; i++)
+                {
+                    var v = _mono[i];
+                    if (v > 1e-4f || v < -1e-4f)
+                    {
+                        _owner.NoteSignal(now);
+                        break;
+                    }
+                }
                 lock (_ringGate)
                 {
                     if (_lastDataTimestamp != 0 && (now - _lastDataTimestamp) * TicksToSeconds > GapResetSeconds)
@@ -852,6 +943,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
             var sampleRate = _converter.SampleRate;
             long lastCursor = 0;
             long lastFrameTimestamp = 0;
+            long lastTraceTimestamp = 0;
 
             try
             {
@@ -899,6 +991,16 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
                     lastFrameTimestamp = now;
 
                     _owner.PublishFrame(this, _processor.Bands, _processor.Level, now);
+
+                    // Debug-build diagnostics: one line every ~3 s while frames are produced.
+                    if ((now - lastTraceTimestamp) * TicksToSeconds >= 3)
+                    {
+                        lastTraceTimestamp = now;
+                        var bands = _processor.Bands;
+                        var peak = 0f;
+                        for (var i = 0; i < bands.Length; i++) peak = Math.Max(peak, bands[i]);
+                        Log.Debug($"Audio: frames={_processor.FrameCount} level={_processor.Level:0.000} peakBand={peak:0.000} gainDb={_processor.CurrentGainDb:0.0}");
+                    }
                 }
             }
             catch (Exception ex)

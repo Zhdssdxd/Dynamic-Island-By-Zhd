@@ -74,9 +74,9 @@ public sealed class FeatureSettings
     /// <summary>Visualizer sensitivity multiplier 0.5..2.</summary>
     public double VisualizerSensitivity { get; set; } = 1.0;
     /// <summary>
-    /// Render endpoint ID captured by the visualizer; empty = the Windows default output device.
-    /// Useful with virtual mixers (SteelSeries Sonar, Voicemeeter) that route apps to different endpoints:
-    /// pick the physical device that receives the final mix.
+    /// Render endpoint ID captured by the visualizer; empty = automatic: the default output device, switching to
+    /// whichever endpoint is actually playing (virtual mixers such as SteelSeries Sonar or Voicemeeter route apps
+    /// to different endpoints).
     /// </summary>
     public string VisualizerDeviceId { get; set; } = "";
     public bool DownloadsEnabled { get; set; } = true;

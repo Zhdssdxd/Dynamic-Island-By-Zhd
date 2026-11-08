@@ -110,14 +110,26 @@ public sealed class AppManager : IAsyncDisposable
         if (_settingsWindow is { IsLoaded: true })
         {
             if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
-            _settingsWindow.Activate();
+            BringToFront(_settingsWindow);
             return;
         }
 
         _settingsWindow = new SettingsWindow(_settings, _bus, _statusRegistry);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
-        _settingsWindow.Activate();
+        BringToFront(_settingsWindow);
+    }
+
+    /// <summary>
+    /// Windows' focus-steal protection ignores Activate() when another process owns the foreground
+    /// (e.g. the settings were opened from a hotkey or a second launch). A brief Topmost toggle raises the window anyway.
+    /// </summary>
+    private static void BringToFront(Window window)
+    {
+        window.Topmost = true;
+        window.Activate();
+        window.Topmost = false;
+        window.Focus();
     }
 
     public async ValueTask DisposeAsync()

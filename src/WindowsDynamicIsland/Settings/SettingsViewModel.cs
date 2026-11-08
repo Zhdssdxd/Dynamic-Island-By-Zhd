@@ -606,7 +606,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public void RefreshAudioDevices(string? selectedId = null)
     {
-        var options = new List<SettingsOption> { new("Устройство вывода по умолчанию", "") };
+        var options = new List<SettingsOption> { new("Автоматически — где играет звук", "") };
         foreach (var device in WindowsDynamicIsland.Audio.AudioAnalyzer.GetRenderDevices())
             options.Add(new SettingsOption(device.Value, device.Key));
 
