@@ -21,6 +21,18 @@
                         FallbackGlyph="{x:Static m:Glyphs.Music}"
                         GlyphSize="11" />
 
+        <!-- Live sound wave between the artwork and the bars while music plays. -->
+        <audio:VisualizerControl Grid.Column="1"
+                                 Height="14"
+                                 Margin="10,0"
+                                 VerticalAlignment="Center"
+                                 IsHitTestVisible="False"
+                                 Mode="Waveform"
+                                 IsActive="{Binding State.IsVisualizerActive}"
+                                 BarBrush="{Binding AccentBrush}"
+                                 Opacity="0.55"
+                                 Visibility="{Binding ShowPlayingBars, Converter={StaticResource BoolToVisibility}}" />
+
         <!-- Second live activity (e.g. a running download) as a tiny badge. -->
         <TextBlock Grid.Column="2"
                    Margin="0,0,10,0"
