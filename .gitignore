@@ -7,3 +7,5 @@ artifacts/
 TestResults/
 installer/Output/
 build/*.log
+build/*.bundle
+build/push-to-github.cmd
