@@ -155,6 +155,8 @@ public static class IslandLayout
                 break;
             case IslandViewKind.ExpandedVideo:
                 size = s.Media is { HasTimeline: true } ? ExpandedVideoSize : ExpandedVideoNoTimelineSize;
+                // The session switcher adds a row of chips under the title.
+                if (s.MediaSessions.Count > 1) size = new Size(size.Width, size.Height + 18);
                 break;
             case IslandViewKind.ExpandedTimer:
                 size = s.Timer is { Kind: TimerKind.Countdown } ? ExpandedTimerCountdownSize : ExpandedTimerStopwatchSize;

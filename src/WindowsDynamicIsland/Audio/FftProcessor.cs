@@ -36,7 +36,7 @@ public sealed class FftProcessor
     private const float BandDbFloorForMean = -120f;
     private const float AgcTargetMeanDb = -30f;
     private const float AgcMinGainDb = -12f;
-    private const float AgcMaxGainDb = 24f;
+    private const float AgcMaxGainDb = 36f;
     private const float AgcAttack = 0.3f;
     private const float AgcRelease = 0.005f;
     private const float AgcTrackerMinDb = -80f;
@@ -160,7 +160,7 @@ public sealed class FftProcessor
     private float _tiltDbPerOctave = 3f;
 
     /// <summary>
-    /// When true (default) a tracker of the mean band level (fast up, ~3 s down) steers the gain (−12..+24 dB) so the
+    /// When true (default) a tracker of the mean band level (fast up, ~3 s down) steers the gain (−12..+36 dB) so the
     /// average band sits around the middle of the range: quiet tracks still move, loud ones do not saturate, and a
     /// single dominant tone does not squash everything else.
     /// </summary>

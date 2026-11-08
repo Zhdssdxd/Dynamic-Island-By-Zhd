@@ -5,7 +5,7 @@ namespace WindowsDynamicIsland.Audio;
 
 /// <summary>
 /// Converts interleaved WASAPI buffers (IEEE float 32/64-bit, PCM 8/16/24/32-bit, plain or WAVE_FORMAT_EXTENSIBLE)
-/// into mono floats in −1..1 by averaging channels. Allocation-free per call. Audio is never stored or written.
+/// into mono floats in −1..1 by averaging the front left/right channels. Allocation-free per call. Audio is never stored or written.
 /// </summary>
 internal sealed class SampleConverter
 {
@@ -145,7 +145,10 @@ internal sealed class SampleConverter
         if (frames == 0) return 0;
 
         var channels = Channels;
-        var inv = 1f / channels;
+        // Multichannel endpoints (5.1/7.1, e.g. virtual mixers) carry stereo music in front L/R only:
+        // averaging all channels would attenuate it by up to 12 dB, so only the front pair is mixed.
+        var mix = Math.Min(channels, 2);
+        var inv = 1f / mix;
         var block = BlockAlign;
 
         switch (_kind)
@@ -153,10 +156,10 @@ internal sealed class SampleConverter
             case Kind.Float32 when block == 4 * channels:
             {
                 var src = MemoryMarshal.Cast<byte, float>(source.Slice(0, frames * block));
-                for (int f = 0, i = 0; f < frames; f++)
+                for (int f = 0, i = 0; f < frames; f++, i += channels)
                 {
                     float sum = 0;
-                    for (var c = 0; c < channels; c++, i++) sum += src[i];
+                    for (var c = 0; c < mix; c++) sum += src[i + c];
                     destination[f] = Sanitize(sum * inv);
                 }
                 break;
@@ -165,10 +168,10 @@ internal sealed class SampleConverter
             {
                 var src = MemoryMarshal.Cast<byte, short>(source.Slice(0, frames * block));
                 const float scale = 1f / 32768f;
-                for (int f = 0, i = 0; f < frames; f++)
+                for (int f = 0, i = 0; f < frames; f++, i += channels)
                 {
                     var sum = 0;
-                    for (var c = 0; c < channels; c++, i++) sum += src[i];
+                    for (var c = 0; c < mix; c++) sum += src[i + c];
                     destination[f] = sum * scale * inv;
                 }
                 break;
@@ -180,7 +183,7 @@ internal sealed class SampleConverter
                 {
                     var frame = source.Slice(f * block, block);
                     float sum = 0;
-                    for (var c = 0; c < channels; c++)
+                    for (var c = 0; c < mix; c++)
                         sum += ReadSample(frame.Slice(c * _bytesPerSample, _bytesPerSample));
                     destination[f] = Sanitize(sum * inv);
                 }

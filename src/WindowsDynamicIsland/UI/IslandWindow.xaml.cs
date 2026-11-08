@@ -224,6 +224,7 @@ public partial class IslandWindow : Window
                 UpdateLayoutForState(force: false);
                 break;
             case nameof(IslandState.Media):
+            case nameof(IslandState.MediaSessions):
             case nameof(IslandState.Timer):
             case nameof(IslandState.SecondaryActivity):
             case nameof(IslandState.Notification):
