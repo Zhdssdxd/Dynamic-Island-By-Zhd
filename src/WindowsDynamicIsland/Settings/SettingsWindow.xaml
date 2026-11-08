@@ -241,8 +241,8 @@
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Раскрывать при наведении" Tag="Помимо щелчка — после короткой задержки">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ExpandOnHover}" />
                     </HeaderedContentControl>
-                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Пульсация под бит"
-                                            Tag="Низ раскрытого острова подпрыгивает в такт музыке и видео (нужен включённый визуализатор)">
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна под бит"
+                                            Tag="Низ раскрытого острова становится волной в такт музыке и видео (нужен включённый визуализатор)">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding PulseToBeat}" />
                     </HeaderedContentControl>
                 </StackPanel>

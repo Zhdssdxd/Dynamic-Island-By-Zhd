@@ -58,6 +58,12 @@
                                               Duration="0:0:0.26" />
                 </Grid>
             </Border>
+
+            <!-- Audio-reactive wave that forms the capsule's bottom edge while expanded on playing media.
+                 A Canvas so the wave can extend below the capsule without being layout-clipped. -->
+            <Canvas x:Name="WaveLayer" IsHitTestVisible="False" ClipToBounds="False">
+                <Path x:Name="WavePath" Visibility="Collapsed" Fill="{StaticResource IslandBrush}" />
+            </Canvas>
         </Grid>
     </Grid>
 </Window>

@@ -58,6 +58,13 @@ public partial class IslandWindow : Window
     // Beat pulse (bottom edge bounces to the music while expanded).
     private const double BeatMaxOffset = 7;
     private const double BeatBreathing = 1.5;
+    private const double WaveBandAmplitude = 5;
+    private const int WavePoints = 48;
+    private readonly float[] _waveLevels = new float[WavePoints + 1];
+    private readonly PathFigure _waveFigure = new() { IsClosed = true, IsFilled = true };
+    private readonly PolyLineSegment _waveSegment = new();
+    private double _wavePhase;
+    private TimeSpan _lastWaveFrame;
     private readonly float[] _beatBands = new float[32];
     private IDisposable? _beatConsumer;
     private bool _beatHooked;
@@ -89,6 +96,11 @@ public partial class IslandWindow : Window
         };
 
         ClipHost.Clip = _clip;
+
+        // Reusable wave geometry: start point + right top corner + (WavePoints + 1) wave points, updated in place.
+        for (var i = 0; i < WavePoints + 2; i++) _waveSegment.Points.Add(new Point());
+        _waveFigure.Segments.Add(_waveSegment);
+        WavePath.Data = new PathGeometry(new[] { _waveFigure });
 
         Capsule.MouseEnter += OnCapsuleMouseEnter;
         Capsule.MouseLeave += OnCapsuleMouseLeave;
@@ -372,7 +384,7 @@ public partial class IslandWindow : Window
 
     private void ApplyGeometry()
     {
-        var height = _height + _beatOffset;
+        var height = _height;
         CapsuleHost.Width = _width;
         CapsuleHost.Height = height;
         var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
@@ -393,6 +405,7 @@ public partial class IslandWindow : Window
         var brush = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
         brush.Freeze();
         Capsule.Background = brush;
+        WavePath.Fill = brush;
         CapsuleShadow.Opacity = 0.45 * a.Opacity;
     }
 
@@ -439,36 +452,101 @@ public partial class IslandWindow : Window
         if (!_beatHooked) return;
         _beatHooked = false;
         CompositionTarget.Rendering -= OnBeatFrame;
+        _lastWaveFrame = TimeSpan.Zero;
+        Array.Clear(_waveLevels);
+        WavePath.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
-    /// Per frame: bass energy (lowest bands, ~40–150 Hz) vs. its running average. A jump above the average is a beat
-    /// and kicks the bottom edge down (fast attack); between beats it relaxes smoothly and "breathes" with the bass.
+    /// Per frame: bass energy (lowest bands, ~40–150 Hz) vs. its running average detects beats; the spectrum shapes the
+    /// wave (bass in the middle, highs toward the corners) and the wave travels along the bottom edge, faster on beats.
     /// </summary>
     private void OnBeatFrame(object? sender, EventArgs e)
     {
+        var now = e is RenderingEventArgs args ? args.RenderingTime : TimeSpan.Zero;
+        if (now == _lastWaveFrame && now != TimeSpan.Zero) return; // Rendering can fire twice per frame
+        var dt = _lastWaveFrame == TimeSpan.Zero ? 1.0 / 60 : Math.Clamp((now - _lastWaveFrame).TotalSeconds, 0, 0.1);
+        _lastWaveFrame = now;
+
+        var speed = AnimationEngine.Instance.SpeedMultiplier;
         double target = 0;
-        if (_beatWanted && ServiceRegistry.Get<ISpectrumSource>() is { } source && source.TryGetBands(_beatBands, out _))
+        double kick = 0;
+        var haveBands = _beatWanted && ServiceRegistry.Get<ISpectrumSource>() is { } source && source.TryGetBands(_beatBands, out _);
+        if (haveBands)
         {
             var bass = (_beatBands[0] + _beatBands[1] + _beatBands[2] + _beatBands[3] + _beatBands[4]) / 5.0;
             _bassAverage += (bass - _bassAverage) * 0.05;
-            var kick = Math.Clamp((bass - _bassAverage * 1.08) / 0.22, 0, 1);
+            kick = Math.Clamp((bass - _bassAverage * 1.08) / 0.22, 0, 1);
             target = BeatMaxOffset * kick + BeatBreathing * bass;
         }
 
-        var speed = AnimationEngine.Instance.SpeedMultiplier;
+        // Fast attack, smooth release.
         var k = target > _beatOffset ? 0.55 : 0.10;
         _beatOffset += (target - _beatOffset) * Math.Min(1, k * speed);
 
-        if (!_beatWanted && _beatOffset < 0.05)
+        // Spectrum → wave levels, mirrored around the centre (bass in the middle).
+        var maxLevel = 0f;
+        for (var i = 0; i <= WavePoints; i++)
+        {
+            float v = 0;
+            if (haveBands)
+            {
+                var t = Math.Abs(2.0 * i / WavePoints - 1) * 20;
+                var lo = (int)t;
+                var hi = Math.Min(lo + 1, _beatBands.Length - 1);
+                var frac = (float)(t - lo);
+                v = _beatBands[lo] + (_beatBands[hi] - _beatBands[lo]) * frac;
+            }
+            var current = _waveLevels[i];
+            current += (v - current) * (v > current ? 0.5f : 0.15f);
+            _waveLevels[i] = current;
+            if (current > maxLevel) maxLevel = current;
+        }
+
+        _wavePhase += dt * speed * (4.5 + 9 * kick);
+        if (_wavePhase > Math.PI * 2000) _wavePhase -= Math.PI * 2000;
+
+        if (!_beatWanted && _beatOffset < 0.05 && maxLevel < 0.02f)
         {
             _beatOffset = 0;
             _bassAverage = 0;
-            ApplyGeometry();
             UnhookBeat();
             return;
         }
-        ApplyGeometry();
+        UpdateWavePath();
+    }
+
+    /// <summary>
+    /// Rebuilds the wave in place: a strip spanning the straight part of the bottom edge (between the rounded corners),
+    /// its top hidden inside the capsule and its bottom following the wave. A sine envelope makes it melt into the corners.
+    /// </summary>
+    private void UpdateWavePath()
+    {
+        var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
+        var inset = r * 0.85;
+        var w = _width - 2 * inset;
+        if (w < 24 || _height < 40)
+        {
+            WavePath.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        const double overlap = 1.5; // covers the capsule's hairline stroke so the wave looks like the edge itself
+        Canvas.SetLeft(WavePath, inset);
+        Canvas.SetTop(WavePath, _height - overlap);
+        WavePath.Visibility = Visibility.Visible;
+
+        _waveFigure.StartPoint = new Point(0, 0);
+        _waveSegment.Points[0] = new Point(w, 0);
+        for (var j = 0; j <= WavePoints; j++)
+        {
+            var i = WavePoints - j; // right → left to close the shape
+            var u = (double)i / WavePoints;
+            var envelope = Math.Pow(Math.Sin(Math.PI * u), 1.3);
+            var travel = 0.5 + 0.5 * Math.Sin(2 * Math.PI * u * 2.2 - _wavePhase);
+            var y = overlap + envelope * (_beatOffset * (0.45 + 0.55 * travel) + WaveBandAmplitude * _waveLevels[i]);
+            _waveSegment.Points[j + 1] = new Point(w * u, y);
+        }
     }
 
     // ───────────────────────────── Mouse interaction ─────────────────────────────
