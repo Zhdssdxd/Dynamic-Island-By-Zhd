@@ -72,12 +72,11 @@ public partial class IslandWindow : Window
     private static readonly Brush OutlineStroke = CreateFrozenBrush(Color.FromArgb(0x5C, 0xFF, 0xFF, 0xFF));
 
     // Beat pulse (bottom edge bounces to the music while expanded).
-    private const double BeatMaxOffset = 22;
+    private const double BeatMaxOffset = 18;
     private const double BeatBreathing = 4;
     private const double WaveBandAmplitude = 9;
-    /// <summary>Fine ripple on top of the swell, driven by the highs (texture).</summary>
-    private const double WaveRippleAmplitude = 3;
-    private double _highLevel;
+    private double _waveMaxBulge;
+    private double _swellLevel;
     private const int WavePoints = 48;
     /// <summary>Frequency heard at the centre of the bottom wave (bass) …</summary>
     private const double WaveCenterHz = 55;
@@ -576,13 +575,13 @@ public partial class IslandWindow : Window
             _bassAverage += (bass - _bassAverage) * 0.05;
             kick = Math.Clamp((bass - _bassAverage * 1.04) / 0.16, 0, 1);
             target = BeatMaxOffset * kick + BeatBreathing * bass;
-            var high = SpectrumShaper.PeakBetween(_beatBands, 2500, 9000);
-            _highLevel += (high - _highLevel) * 0.35;
+            var mids = SpectrumShaper.PeakBetween(_beatBands, 150, 1500);
+            _swellLevel += (mids - _swellLevel) * 0.25;
         }
 
         // Fast attack, smooth release.
-        var k = target > _beatOffset ? 0.85 : 0.16; // hard hit, quick drop
-        if (!haveBands) _highLevel *= 0.85;
+        var k = target > _beatOffset ? 0.6 : 0.09; // quick swell, soft settle
+        if (!haveBands) _swellLevel *= 0.9;
         _beatOffset += (target - _beatOffset) * Math.Min(1, k * speed);
 
         // Spectrum → wave levels, mirrored around the centre (bass in the middle).
@@ -602,7 +601,7 @@ public partial class IslandWindow : Window
             if (current > maxLevel) maxLevel = current;
         }
 
-        _wavePhase += dt * speed * (6 + 18 * kick);
+        _wavePhase += dt * speed * (1.8 + 3 * kick); // calm drift; a kick only nudges it
         StepAmbientColor(dt);
         if (_wavePhase > Math.PI * 2000) _wavePhase -= Math.PI * 2000;
 
@@ -610,7 +609,7 @@ public partial class IslandWindow : Window
         {
             _beatOffset = 0;
             _bassAverage = 0;
-            _highLevel = 0;
+            _swellLevel = 0;
             UnhookBeat();
             return;
         }
@@ -637,34 +636,45 @@ public partial class IslandWindow : Window
         Canvas.SetTop(WavePath, 0);
         WavePath.Visibility = Visibility.Visible;
 
-        // The strip starts well inside the capsule (y = height − r) and its lower edge follows the capsule's real outline
-        // (including the rounded corners) plus the wave — so nothing ever sticks out past the corners.
+        // The strip starts well inside the capsule (y = height − r); its lower edge is the capsule's real outline
+        // (rounded corners included) pushed down by smooth crests — at rest it is exactly the capsule, no slab.
         var top = _height - Math.Max(r, 4);
         _waveFigure.StartPoint = new Point(0, top);
         _waveSegment.Points[0] = new Point(w, top);
+
+        // A liquid drop: the main crest sits near the centre and swells with the bass (rounded tip, smooth fillets into
+        // the edge); two smaller drops drift left and right with the mids. All fade out well before the corners.
+        var centre = 0.5 + 0.1 * Math.Sin(_wavePhase * 0.31);
+        var side1 = 0.5 + 0.3 * Math.Sin(_wavePhase * 0.55 + 1.0);
+        var side2 = 0.5 + 0.3 * Math.Sin(_wavePhase * 0.55 + 4.1);
+        var maxBulge = 0.0;
         for (var j = 0; j <= WavePoints; j++)
         {
             var i = WavePoints - j; // right → left to close the shape
             var u = (double)i / WavePoints;
             var x = inset + w * u;
             var edge = CapsuleBottomAt(x, r) - overlap;
-            var envelope = Math.Pow(Math.Sin(Math.PI * u), 0.9);
-            // Pointed crests (squared sine) travelling along the edge — the black shell itself waves.
-            var crest = 0.5 + 0.5 * Math.Sin(2 * Math.PI * u * 3.4 - _wavePhase);
-            var travel = crest * crest;
-            var ripple = Math.Sin(2 * Math.PI * u * 11 - _wavePhase * 1.7);
-            var bulge = envelope * (_beatOffset * (0.3 + 0.7 * travel)
-                                    + WaveBandAmplitude * _waveLevels[i] * (0.6 + 0.4 * travel)
-                                    + WaveRippleAmplitude * _highLevel * ripple);
+            var envelope = Math.Pow(Math.Sin(Math.PI * u), 1.2);
+            var main = Gauss(u - centre, 0.13);
+            var sides = 0.75 * Gauss(u - side1, 0.09) + 0.6 * Gauss(u - side2, 0.09);
+            var bulge = envelope * (_beatOffset * main + WaveBandAmplitude * _swellLevel * sides);
+            if (bulge > maxBulge) maxBulge = bulge;
             _waveSegment.Points[j + 1] = new Point(w * u, edge + Math.Max(0, bulge));
         }
+        _waveMaxBulge += (maxBulge - _waveMaxBulge) * 0.2;
 
         if (_ambientWaveBrush is not null && ReferenceEquals(WavePath.Fill, _ambientWaveBrush))
         {
-            // Black where it leaves the capsule, the colour of what is behind the island at the crest.
+            // Black where it leaves the capsule, melting into the colour of what is behind the island at the crest.
             _ambientWaveBrush.StartPoint = new Point(0, _height - overlap);
-            _ambientWaveBrush.EndPoint = new Point(0, _height + BeatMaxOffset * 0.8);
+            _ambientWaveBrush.EndPoint = new Point(0, _height + Math.Max(4, _waveMaxBulge));
         }
+    }
+
+    private static double Gauss(double d, double sigma)
+    {
+        var t = d / sigma;
+        return Math.Exp(-t * t);
     }
 
     /// <summary>Y of the capsule's bottom outline at <paramref name="x"/> (capsule coordinates), honouring the corner radius.</summary>
@@ -696,6 +706,7 @@ public partial class IslandWindow : Window
             {
                 _ambientWaveBrush = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute };
                 _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 0));
+                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 0.45));
                 _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 1));
             }
             WavePath.Fill = _ambientWaveBrush;
@@ -781,8 +792,15 @@ public partial class IslandWindow : Window
             (byte)(_ambientColor.G + (_ambientTarget.G - _ambientColor.G) * k),
             (byte)(_ambientColor.B + (_ambientTarget.B - _ambientColor.B) * k));
         var alpha = _fillBrush?.Color.A ?? (byte)255;
-        _ambientWaveBrush.GradientStops[0].Color = Color.FromArgb(alpha, _fillColor.R, _fillColor.G, _fillColor.B);
-        _ambientWaveBrush.GradientStops[1].Color = Color.FromArgb(alpha, _ambientColor.R, _ambientColor.G, _ambientColor.B);
+        // Black body; only the tip of the drop picks up the colour behind the island (60 % mix → glossy, not washed out).
+        var body = Color.FromArgb(alpha, _fillColor.R, _fillColor.G, _fillColor.B);
+        var tip = Color.FromArgb(alpha,
+            (byte)(_fillColor.R + (_ambientColor.R - _fillColor.R) * 0.6),
+            (byte)(_fillColor.G + (_ambientColor.G - _fillColor.G) * 0.6),
+            (byte)(_fillColor.B + (_ambientColor.B - _fillColor.B) * 0.6));
+        _ambientWaveBrush.GradientStops[0].Color = body;
+        _ambientWaveBrush.GradientStops[1].Color = body;
+        _ambientWaveBrush.GradientStops[2].Color = tip;
     }
 
     // ───────────────────────────── Mouse interaction ─────────────────────────────
