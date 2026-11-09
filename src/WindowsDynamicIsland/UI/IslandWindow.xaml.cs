@@ -538,6 +538,7 @@ public partial class IslandWindow : Window
 
     private void HookBeat()
     {
+        UpdateAmbientSampling(true); // also re-checks the setting while already running
         if (_beatHooked) return;
         _beatHooked = true;
         CompositionTarget.Rendering += OnBeatFrame;
@@ -548,6 +549,7 @@ public partial class IslandWindow : Window
         if (!_beatHooked) return;
         _beatHooked = false;
         CompositionTarget.Rendering -= OnBeatFrame;
+        UpdateAmbientSampling(false);
         _lastWaveFrame = TimeSpan.Zero;
         Array.Clear(_waveLevels);
         WavePath.Visibility = Visibility.Collapsed;
@@ -601,6 +603,7 @@ public partial class IslandWindow : Window
         }
 
         _wavePhase += dt * speed * (6 + 18 * kick);
+        StepAmbientColor(dt);
         if (_wavePhase > Math.PI * 2000) _wavePhase -= Math.PI * 2000;
 
         if (!_beatWanted && _beatOffset < 0.05 && maxLevel < 0.02f)
@@ -621,7 +624,7 @@ public partial class IslandWindow : Window
     private void UpdateWavePath()
     {
         var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
-        var inset = r * 0.55;
+        var inset = r * 0.3;
         var w = _width - 2 * inset;
         if (w < 24 || _height < 40)
         {
@@ -631,26 +634,155 @@ public partial class IslandWindow : Window
 
         const double overlap = 1.5; // covers the capsule's hairline stroke so the wave looks like the edge itself
         Canvas.SetLeft(WavePath, inset);
-        Canvas.SetTop(WavePath, _height - overlap);
+        Canvas.SetTop(WavePath, 0);
         WavePath.Visibility = Visibility.Visible;
 
-        _waveFigure.StartPoint = new Point(0, 0);
-        _waveSegment.Points[0] = new Point(w, 0);
+        // The strip starts well inside the capsule (y = height − r) and its lower edge follows the capsule's real outline
+        // (including the rounded corners) plus the wave — so nothing ever sticks out past the corners.
+        var top = _height - Math.Max(r, 4);
+        _waveFigure.StartPoint = new Point(0, top);
+        _waveSegment.Points[0] = new Point(w, top);
         for (var j = 0; j <= WavePoints; j++)
         {
             var i = WavePoints - j; // right → left to close the shape
             var u = (double)i / WavePoints;
+            var x = inset + w * u;
+            var edge = CapsuleBottomAt(x, r) - overlap;
             var envelope = Math.Pow(Math.Sin(Math.PI * u), 0.9);
             // Pointed crests (squared sine) travelling along the edge — the black shell itself waves.
             var crest = 0.5 + 0.5 * Math.Sin(2 * Math.PI * u * 3.4 - _wavePhase);
             var travel = crest * crest;
             var ripple = Math.Sin(2 * Math.PI * u * 11 - _wavePhase * 1.7);
-            var y = overlap + envelope * (_beatOffset * (0.3 + 0.7 * travel)
-                                          + WaveBandAmplitude * _waveLevels[i] * (0.6 + 0.4 * travel)
-                                          + WaveRippleAmplitude * _highLevel * ripple);
-            if (y < overlap) y = overlap;
-            _waveSegment.Points[j + 1] = new Point(w * u, y);
+            var bulge = envelope * (_beatOffset * (0.3 + 0.7 * travel)
+                                    + WaveBandAmplitude * _waveLevels[i] * (0.6 + 0.4 * travel)
+                                    + WaveRippleAmplitude * _highLevel * ripple);
+            _waveSegment.Points[j + 1] = new Point(w * u, edge + Math.Max(0, bulge));
         }
+
+        if (_ambientWaveBrush is not null && ReferenceEquals(WavePath.Fill, _ambientWaveBrush))
+        {
+            // Black where it leaves the capsule, the colour of what is behind the island at the crest.
+            _ambientWaveBrush.StartPoint = new Point(0, _height - overlap);
+            _ambientWaveBrush.EndPoint = new Point(0, _height + BeatMaxOffset * 0.8);
+        }
+    }
+
+    /// <summary>Y of the capsule's bottom outline at <paramref name="x"/> (capsule coordinates), honouring the corner radius.</summary>
+    private double CapsuleBottomAt(double x, double r)
+    {
+        if (r <= 0) return _height;
+        double dx;
+        if (x < r) dx = r - x;
+        else if (x > _width - r) dx = x - (_width - r);
+        else return _height;
+        dx = Math.Min(dx, r);
+        return _height - r + Math.Sqrt(r * r - dx * dx);
+    }
+
+    // ───────────────────────────── Ambient colour (what is behind the island) ─────────────────────────────
+
+    private LinearGradientBrush? _ambientWaveBrush;
+    private Color _ambientColor = Colors.Black;
+    private Color _ambientTarget = Colors.Black;
+    private DispatcherTimer? _ambientTimer;
+
+    /// <summary>Wave colour follows the screen around the island while the beat wave runs (setting "Волна цвета фона").</summary>
+    private void UpdateAmbientSampling(bool active)
+    {
+        var enabled = active && _controller.State.Settings.Appearance.WaveAmbientColor;
+        if (enabled)
+        {
+            if (_ambientWaveBrush is null)
+            {
+                _ambientWaveBrush = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute };
+                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 0));
+                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 1));
+            }
+            WavePath.Fill = _ambientWaveBrush;
+            if (_ambientTimer is null)
+            {
+                _ambientTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(400) };
+                _ambientTimer.Tick += (_, _) => SampleAmbient();
+            }
+            if (!_ambientTimer.IsEnabled)
+            {
+                SampleAmbient();
+                _ambientColor = _ambientTarget;
+                _ambientTimer.Start();
+            }
+        }
+        else
+        {
+            _ambientTimer?.Stop();
+            if (_fillBrush is not null) WavePath.Fill = _fillBrush;
+        }
+    }
+
+    /// <summary>
+    /// Averages small screen areas just outside the island (left, right and below the wave, clear of the shadow),
+    /// i.e. the wallpaper / window behind it. Physical pixels; a few hundred pixels every 400 ms.
+    /// </summary>
+    private void SampleAmbient()
+    {
+        if (_closed || !IsLoaded || PresentationSource.FromVisual(CapsuleHost) is null) return;
+        try
+        {
+            var topLeft = CapsuleHost.PointToScreen(new Point(0, 0));
+            var bottomRight = CapsuleHost.PointToScreen(new Point(_width, _height));
+            var scale = Math.Max(0.5, (bottomRight.X - topLeft.X) / Math.Max(1, _width));
+            int L = (int)topLeft.X, R = (int)bottomRight.X, B = (int)bottomRight.Y;
+            var gap = (int)(28 * scale);
+            var size = (int)(44 * scale);
+            var band = (int)(18 * scale);
+            var rects = new[]
+            {
+                new System.Drawing.Rectangle(L - gap - size, B - band, size, band),
+                new System.Drawing.Rectangle(R + gap, B - band, size, band),
+                new System.Drawing.Rectangle((L + R) / 2 - size, B + (int)(62 * scale), size * 2, band / 2 + 1),
+            };
+
+            var virt = System.Windows.Forms.SystemInformation.VirtualScreen;
+            double sr = 0, sg = 0, sb = 0;
+            var n = 0;
+            foreach (var rect in rects)
+            {
+                var clipped = System.Drawing.Rectangle.Intersect(rect, virt);
+                if (clipped.Width < 2 || clipped.Height < 2) continue;
+                using var bmp = new System.Drawing.Bitmap(clipped.Width, clipped.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    g.CopyFromScreen(clipped.Location, System.Drawing.Point.Empty, clipped.Size);
+                for (var y = 0; y < bmp.Height; y += 3)
+                for (var x = 0; x < bmp.Width; x += 3)
+                {
+                    var c = bmp.GetPixel(x, y);
+                    sr += c.R;
+                    sg += c.G;
+                    sb += c.B;
+                    n++;
+                }
+            }
+            if (n == 0) return;
+            _ambientTarget = Color.FromRgb((byte)(sr / n), (byte)(sg / n), (byte)(sb / n));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("Ambient colour sampling failed", ex);
+            _ambientTimer?.Stop();
+        }
+    }
+
+    /// <summary>Per frame: glide the wave colour toward the sampled one.</summary>
+    private void StepAmbientColor(double dt)
+    {
+        if (_ambientWaveBrush is null || !ReferenceEquals(WavePath.Fill, _ambientWaveBrush)) return;
+        var k = 1 - Math.Exp(-dt * 4);
+        _ambientColor = Color.FromRgb(
+            (byte)(_ambientColor.R + (_ambientTarget.R - _ambientColor.R) * k),
+            (byte)(_ambientColor.G + (_ambientTarget.G - _ambientColor.G) * k),
+            (byte)(_ambientColor.B + (_ambientTarget.B - _ambientColor.B) * k));
+        var alpha = _fillBrush?.Color.A ?? (byte)255;
+        _ambientWaveBrush.GradientStops[0].Color = Color.FromArgb(alpha, _fillColor.R, _fillColor.G, _fillColor.B);
+        _ambientWaveBrush.GradientStops[1].Color = Color.FromArgb(alpha, _ambientColor.R, _ambientColor.G, _ambientColor.B);
     }
 
     // ───────────────────────────── Mouse interaction ─────────────────────────────

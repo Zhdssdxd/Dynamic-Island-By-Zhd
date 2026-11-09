@@ -332,6 +332,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(ref _waveArtworkColors, value, (s, v) => s.Appearance.WaveArtworkColors = v);
     }
 
+    private bool _waveAmbientColor;
+    public bool WaveAmbientColor
+    {
+        get => _waveAmbientColor;
+        set => Set(ref _waveAmbientColor, value, (s, v) => s.Appearance.WaveAmbientColor = v);
+    }
+
     private bool _topBarMode;
     public bool TopBarMode
     {
@@ -782,6 +789,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             CompactWave = a.CompactWave;
             ExpandedWave = a.ExpandedWave;
             WaveArtworkColors = a.WaveArtworkColors;
+            WaveAmbientColor = a.WaveAmbientColor;
             TopBarMode = a.TopBarMode;
             TopBarFill = a.TopBarFill;
             TopBarHeight = a.TopBarHeight;

@@ -77,6 +77,8 @@ public sealed class AppearanceSettings
     public bool ExpandedWave { get; set; } = true;
     /// <summary>Paint the sound waves with a heavily blurred copy of the album art instead of a flat colour.</summary>
     public bool WaveArtworkColors { get; set; } = true;
+    /// <summary>The black beat wave under the expanded island takes the colour of what is behind the island.</summary>
+    public bool WaveAmbientColor { get; set; } = true;
     /// <summary>
     /// Top-bar mode: the island sits at the very top of the monitor and the compact capsule is exactly as tall as the
     /// bar docked there (taskbar on top, YASB, a macOS-style menu bar…). Expanded states still open below it.

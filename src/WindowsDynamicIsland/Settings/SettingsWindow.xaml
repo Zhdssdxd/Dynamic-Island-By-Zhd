@@ -280,6 +280,10 @@
                                             Tag="Волна закрашивается сильно размытой обложкой трека вместо белого">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WaveArtworkColors}" />
                     </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна под бит цвета фона"
+                                            Tag="Чёрная волна снизу острова перетекает в цвет того, что позади (обои, окно)">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WaveAmbientColor}" />
+                    </HeaderedContentControl>
                 </StackPanel>
             </ScrollViewer>
 
