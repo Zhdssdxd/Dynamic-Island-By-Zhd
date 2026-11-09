@@ -68,7 +68,7 @@
                     <Path x:Name="WavePath" Fill="{StaticResource IslandBrush}" />
                     <Path x:Name="WaveShadePath" Visibility="Collapsed">
                         <Path.Effect>
-                            <BlurEffect Radius="7" KernelType="Gaussian" RenderingBias="Performance" />
+                            <BlurEffect Radius="10" KernelType="Gaussian" RenderingBias="Performance" />
                         </Path.Effect>
                     </Path>
                 </Canvas>

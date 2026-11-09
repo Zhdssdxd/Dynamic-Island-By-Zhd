@@ -11,6 +11,7 @@ using WindowsDynamicIsland.Audio;
 using WindowsDynamicIsland.Core;
 using WindowsDynamicIsland.Core.Models;
 using WindowsDynamicIsland.Settings;
+using WindowsDynamicIsland.UI.Components;
 using WindowsDynamicIsland.UI.Native;
 using WindowsDynamicIsland.UI.Views;
 
@@ -74,7 +75,6 @@ public partial class IslandWindow : Window
     // Beat pulse (bottom edge bounces to the music while expanded).
     private const double BeatMaxOffset = 18;
     private const double BeatBreathing = 4;
-    private const double WaveBandAmplitude = 12;
     private double _waveMaxBulge;
     private double _swellLevel;
     private const int WavePoints = 48;
@@ -83,10 +83,7 @@ public partial class IslandWindow : Window
     /// <summary>… and at its ends near the corners; in between the axis is logarithmic, like the iPhone.</summary>
     private const double WaveEdgeHz = 6000;
     private readonly float[] _waveLevels = new float[WavePoints + 1];
-    private readonly PathFigure _waveFigure = new() { IsClosed = true, IsFilled = true };
-    private readonly PolyLineSegment _waveSegment = new();
-    private readonly PathFigure _shadeFigure = new() { IsClosed = true, IsFilled = true };
-    private readonly PolyLineSegment _shadeSegment = new();
+    private readonly CrestWave _crest = new();
     private double _wavePhase;
     private TimeSpan _lastWaveFrame;
     private readonly float[] _beatBands = new float[32];
@@ -122,15 +119,9 @@ public partial class IslandWindow : Window
         ClipHost.Clip = _clip;
         _defaultStroke = Capsule.BorderBrush;
 
-        // Reusable wave geometry: start point + right top corner + (WavePoints + 1) wave points, updated in place.
-        for (var i = 0; i < WavePoints + 2; i++) _waveSegment.Points.Add(new Point());
-        _waveFigure.Segments.Add(_waveSegment);
-        var waveGeometry = new PathGeometry(new[] { _waveFigure });
-        WavePath.Data = waveGeometry;
-        WaveGroup.Clip = waveGeometry; // the blurred shade never spills outside the crest
-        for (var i = 0; i < WavePoints + 4; i++) _shadeSegment.Points.Add(new Point());
-        _shadeFigure.Segments.Add(_shadeSegment);
-        WaveShadePath.Data = new PathGeometry(new[] { _shadeFigure });
+        WavePath.Data = _crest.Outline;
+        WaveGroup.Clip = _crest.Outline; // the blurred shade never spills outside the crest
+        WaveShadePath.Data = _crest.Shade;
 
         Capsule.MouseEnter += OnCapsuleMouseEnter;
         Capsule.MouseLeave += OnCapsuleMouseLeave;
@@ -630,84 +621,22 @@ public partial class IslandWindow : Window
     /// </summary>
     private void UpdateWavePath()
     {
-        var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
-        var inset = r * 0.3;
-        var w = _width - 2 * inset;
-        if (w < 24 || _height < 40)
+        if (!_crest.Update(_width, _height, _radius, _beatOffset, _swellLevel, _wavePhase))
         {
             WaveGroup.Visibility = Visibility.Collapsed;
             return;
         }
-
-        const double overlap = 1.5; // covers the capsule's hairline stroke so the wave looks like the edge itself
-        Canvas.SetLeft(WaveGroup, inset);
+        Canvas.SetLeft(WaveGroup, _crest.Inset);
         Canvas.SetTop(WaveGroup, 0);
         WaveGroup.Visibility = Visibility.Visible;
-
-        // The strip starts well inside the capsule (y = height − r); its lower edge is the capsule's real outline
-        // (rounded corners included) pushed down by smooth crests — at rest it is exactly the capsule, no slab.
-        var top = _height - Math.Max(r, 4);
-        _waveFigure.StartPoint = new Point(0, top);
-        _waveSegment.Points[0] = new Point(w, top);
-        // Shade: same outline but lifted and only partly following the crest, extended past the strip on three sides
-        // so after blurring it is solid black everywhere except a soft band just above the crest's edge.
-        const double shadeMargin = 24;
-        _shadeFigure.StartPoint = new Point(-shadeMargin, top - shadeMargin);
-        _shadeSegment.Points[0] = new Point(w + shadeMargin, top - shadeMargin);
-
-        // A liquid drop: the main crest sits near the centre and swells with the bass (rounded tip, smooth fillets into
-        // the edge); two smaller drops drift left and right with the mids. All fade out well before the corners.
-        var centre = 0.5 + 0.1 * Math.Sin(_wavePhase * 0.31);
-        var side1 = 0.5 + 0.3 * Math.Sin(_wavePhase * 0.55 + 1.0);
-        var side2 = 0.5 + 0.3 * Math.Sin(_wavePhase * 0.55 + 4.1);
-        var maxBulge = 0.0;
-        for (var j = 0; j <= WavePoints; j++)
-        {
-            var i = WavePoints - j; // right → left to close the shape
-            var u = (double)i / WavePoints;
-            var x = inset + w * u;
-            var edge = CapsuleBottomAt(x, r) - overlap;
-            var envelope = Math.Pow(Math.Sin(Math.PI * u), 1.2);
-            var main = Gauss(u - centre, 0.13);
-            var sides = 0.75 * Gauss(u - side1, 0.09) + 0.6 * Gauss(u - side2, 0.09);
-            var bulge = envelope * (_beatOffset * main + WaveBandAmplitude * _swellLevel * sides);
-            if (bulge > maxBulge) maxBulge = bulge;
-            bulge = Math.Max(0, bulge);
-            _waveSegment.Points[j + 1] = new Point(w * u, edge + bulge);
-            var shadeY = edge + ShadeLift + ShadeFollow * bulge;
-            _shadeSegment.Points[j + 2] = new Point(w * u, shadeY);
-            if (j == 0) _shadeSegment.Points[1] = new Point(w + shadeMargin, shadeY);
-            if (j == WavePoints) _shadeSegment.Points[j + 3] = new Point(-shadeMargin, shadeY);
-        }
-        _waveMaxBulge += (maxBulge - _waveMaxBulge) * 0.2;
+        _waveMaxBulge += (_crest.MaxBulge - _waveMaxBulge) * 0.2;
 
         if (_ambientWaveBrush is not null && ReferenceEquals(WavePath.Fill, _ambientWaveBrush))
         {
             // Colour runs left → right like the screen under the crest.
             _ambientWaveBrush.StartPoint = new Point(0, 0);
-            _ambientWaveBrush.EndPoint = new Point(w, 0);
+            _ambientWaveBrush.EndPoint = new Point(_crest.StripWidth, 0);
         }
-    }
-
-    private const double ShadeLift = 2.5;     // px below the capsule edge the black reaches at rest (no coloured rim)
-    private const double ShadeFollow = 0.25;  // share of the crest the black follows → the rest shows the colour
-
-    private static double Gauss(double d, double sigma)
-    {
-        var t = d / sigma;
-        return Math.Exp(-t * t);
-    }
-
-    /// <summary>Y of the capsule's bottom outline at <paramref name="x"/> (capsule coordinates), honouring the corner radius.</summary>
-    private double CapsuleBottomAt(double x, double r)
-    {
-        if (r <= 0) return _height;
-        double dx;
-        if (x < r) dx = r - x;
-        else if (x > _width - r) dx = x - (_width - r);
-        else return _height;
-        dx = Math.Min(dx, r);
-        return _height - r + Math.Sqrt(r * r - dx * dx);
     }
 
     // ───────────────────────────── Ambient colour (what is behind the island) ─────────────────────────────
