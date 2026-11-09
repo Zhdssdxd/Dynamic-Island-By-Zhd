@@ -17,7 +17,7 @@ public sealed class VisualizerControl : FrameworkElement
     private const int MaxBars = 128;
     private const int DefaultEqualizerBars = 16;
     private const int DefaultMinimalBars = 5;
-    private const int DefaultWaveformPoints = 32;
+    private const int DefaultWaveformPoints = 24;
     private const int MaxSourceBands = 256;
 
     private const double RiseRate = 26.0;          // 1/s — display follows rising values quickly
@@ -31,7 +31,8 @@ public sealed class VisualizerControl : FrameworkElement
     private const double MinimalRestFraction = 0.15;
     private const double WaveStrokeThickness = 1.5;
     private const double WaveFillOpacity = 0.7;
-    private const double WaveTaperExponent = 0.6;
+    /// <summary>Share of the width kept quiet at each end of the wave (the curve rises from the centre line there).</summary>
+    private const double WaveEdge = 0.07;
 
     private static readonly Brush EqualizerOpacityMask = CreateEqualizerMask();
 
@@ -52,7 +53,7 @@ public sealed class VisualizerControl : FrameworkElement
         nameof(BarBrush), typeof(Brush), typeof(VisualizerControl),
         new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender, OnBarBrushChanged));
 
-    /// <summary>Number of bars (or wave points). 0 = automatic: Equalizer 16, MinimalBars 5, Waveform 32. Max 128.</summary>
+    /// <summary>Number of bars (or wave points). 0 = automatic: Equalizer 16, MinimalBars 5, Waveform 24. Max 128.</summary>
     public static readonly DependencyProperty BarCountProperty = DependencyProperty.Register(
         nameof(BarCount), typeof(int), typeof(VisualizerControl),
         new FrameworkPropertyMetadata(0,
@@ -74,6 +75,7 @@ public sealed class VisualizerControl : FrameworkElement
     private TimeSpan _lastRenderingTime;
     private VisualizerStyle? _fadeFromMode;
     private double _crossfade = 1.0;
+    private readonly BassPunch _punch = new();
     private Pen? _strokePen;
     private Brush? _strokePenBrush;
 
@@ -258,6 +260,7 @@ public sealed class VisualizerControl : FrameworkElement
     {
         Array.Clear(_target);
         Array.Clear(_display);
+        _punch.Reset();
         _fadeFromMode = null;
         _crossfade = 1.0;
         InvalidateVisual();
@@ -265,6 +268,7 @@ public sealed class VisualizerControl : FrameworkElement
 
     private bool IsAtRest()
     {
+        if (_punch.Value > SettleEpsilon) return false;
         foreach (var v in _display)
             if (v > SettleEpsilon) return false;
         return true;
@@ -338,6 +342,16 @@ public sealed class VisualizerControl : FrameworkElement
             moving = true;
         }
 
+        // Kick detector for the first (bass) bar / wave point.
+        var previousPunch = _punch.Value;
+        var bass = hasData ? SpectrumShaper.PeakBetween(_display, SpectrumShaper.MinHz, SpectrumShaper.BassHighHz) : 0f;
+        var punch = _punch.Update(bass, dt);
+        if (Math.Abs(punch - previousPunch) > SettleEpsilon || punch > SettleEpsilon)
+        {
+            changed |= punch != previousPunch;
+            moving |= punch > SettleEpsilon;
+        }
+
         if (_crossfade < 1.0)
         {
             _crossfade = Math.Min(1.0, _crossfade + dt / CrossfadeSeconds);
@@ -409,7 +423,7 @@ public sealed class VisualizerControl : FrameworkElement
         var count = ResolveCount(mode);
         Span<float> buffer = stackalloc float[MaxBars];
         var values = buffer.Slice(0, count);
-        SampleDisplay(values, blendPeaks: mode != VisualizerStyle.Waveform);
+        SampleDisplay(values);
 
         var pushed = opacity < 0.999;
         if (pushed) dc.PushOpacity(opacity);
@@ -429,32 +443,14 @@ public sealed class VisualizerControl : FrameworkElement
     }
 
     /// <summary>
-    /// Maps the per-band display values (low → high) onto <paramref name="destination"/>. When grouping several bands
-    /// into one bar, blends group peak and mean so bars stay lively without flickering.
+    /// iPhone-style mapping: every bar / wave point listens to a fixed frequency on a logarithmic axis
+    /// (<see cref="SpectrumShaper.FixedFrequencies"/>); the first one is the bass and jumps hard on kicks.
     /// </summary>
-    private void SampleDisplay(Span<float> destination, bool blendPeaks)
+    private void SampleDisplay(Span<float> destination)
     {
-        var source = _display;
-        if (!blendPeaks || destination.Length >= source.Length)
-        {
-            FftProcessor.Resample(source, destination);
-            return;
-        }
-
-        var ratio = (double)source.Length / destination.Length;
-        for (var j = 0; j < destination.Length; j++)
-        {
-            var from = (int)(j * ratio);
-            var to = Math.Min(source.Length, Math.Max(from + 1, (int)((j + 1) * ratio)));
-            float sum = 0f, peak = 0f;
-            for (var i = from; i < to; i++)
-            {
-                var v = source[i];
-                sum += v;
-                if (v > peak) peak = v;
-            }
-            destination[j] = Math.Clamp(0.55f * peak + 0.45f * (sum / (to - from)), 0f, 1f);
-        }
+        SpectrumShaper.FixedFrequencies(_display, destination);
+        if (destination.Length > 0)
+            destination[0] = Math.Clamp(0.4f * destination[0] + _punch.Value, 0f, 1f);
     }
 
     /// <summary>A few pill-shaped bars centred vertically; at rest they are small pills (≈15 % height).</summary>
@@ -503,8 +499,9 @@ public sealed class VisualizerControl : FrameworkElement
     }
 
     /// <summary>
-    /// Smooth symmetric wave: Catmull-Rom curve through the points (tapered to the centre line at both ends),
-    /// mirrored around the centre, filled at 70 % opacity and outlined with a 1.5 DIP stroke. At rest: a flat line.
+    /// Smooth symmetric wave: Catmull-Rom curve through the fixed-frequency points (bass first, on the left), rising
+    /// from the centre line at both ends, mirrored around the centre. The fill paints the brush over the whole control
+    /// clipped to the wave (so an album-art brush keeps a stable gradient), plus a 1.5 DIP outline. At rest: a flat line.
     /// </summary>
     private void DrawWaveform(DrawingContext dc, Brush brush, double width, double height, ReadOnlySpan<float> values)
     {
@@ -516,14 +513,16 @@ public sealed class VisualizerControl : FrameworkElement
         var centerY = height / 2;
         var maxAmplitude = Math.Max(0.0, centerY - WaveStrokeThickness);
 
-        Span<Point> upper = stackalloc Point[MaxBars];
-        upper = upper.Slice(0, n);
+        // Quiet anchor points at both ends; the data points sit between them.
+        var total = n + 2;
+        Span<Point> upper = stackalloc Point[MaxBars + 2];
+        upper = upper.Slice(0, total);
+        upper[0] = new Point(pad, centerY);
+        upper[total - 1] = new Point(pad + usableWidth, centerY);
         for (var i = 0; i < n; i++)
         {
-            var u = (double)i / (n - 1);
-            var taper = Math.Pow(Math.Max(0.0, Math.Sin(Math.PI * u)), WaveTaperExponent);
-            var amplitude = values[i] * maxAmplitude * taper;
-            upper[i] = new Point(pad + u * usableWidth, centerY - amplitude);
+            var u = WaveEdge + (1 - 2 * WaveEdge) * i / (n - 1);
+            upper[i + 1] = new Point(pad + u * usableWidth, centerY - values[i] * maxAmplitude);
         }
 
         var geometry = new StreamGeometry();
@@ -532,26 +531,28 @@ public sealed class VisualizerControl : FrameworkElement
             ctx.BeginFigure(upper[0], true, true);
 
             // Upper edge, left → right.
-            for (var i = 0; i < n - 1; i++)
+            for (var i = 0; i < total - 1; i++)
             {
                 AppendCatmullRom(ctx,
-                    upper[Math.Max(i - 1, 0)], upper[i], upper[i + 1], upper[Math.Min(i + 2, n - 1)],
+                    upper[Math.Max(i - 1, 0)], upper[i], upper[i + 1], upper[Math.Min(i + 2, total - 1)],
                     centerY, isUpper: true);
             }
 
             // Lower edge (mirror image), right → left.
-            for (var i = n - 1; i > 0; i--)
+            for (var i = total - 1; i > 0; i--)
             {
                 AppendCatmullRom(ctx,
-                    Mirror(upper[Math.Min(i + 1, n - 1)], centerY), Mirror(upper[i], centerY),
+                    Mirror(upper[Math.Min(i + 1, total - 1)], centerY), Mirror(upper[i], centerY),
                     Mirror(upper[i - 1], centerY), Mirror(upper[Math.Max(i - 2, 0)], centerY),
                     centerY, isUpper: false);
             }
         }
         geometry.Freeze();
 
+        dc.PushClip(geometry);
         dc.PushOpacity(WaveFillOpacity);
-        dc.DrawGeometry(brush, null, geometry);
+        dc.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+        dc.Pop();
         dc.Pop();
         dc.DrawGeometry(null, GetStrokePen(brush), geometry);
     }

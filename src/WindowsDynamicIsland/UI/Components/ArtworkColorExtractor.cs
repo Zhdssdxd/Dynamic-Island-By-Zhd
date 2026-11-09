@@ -36,6 +36,71 @@ public static class ArtworkColorExtractor
         return result;
     }
 
+    private const int BlurSize = 5;
+    private static readonly ConditionalWeakTable<ImageSource, StrongBox<Brush?>> BlurCache = new();
+
+    /// <summary>
+    /// The album art squeezed to 5×5 pixels, colours lifted (more saturation, at least 75 % brightness) and stretched
+    /// back with linear filtering — an extremely blurred, vivid copy of the cover for painting the sound wave.
+    /// Null when there is no readable artwork. Cached weakly per image.
+    /// </summary>
+    public static Brush? GetBlurredBrush(ImageSource? source)
+    {
+        if (source is not BitmapSource bitmap) return null;
+        if (BlurCache.TryGetValue(bitmap, out var cached)) return cached.Value;
+
+        Brush? result = null;
+        try
+        {
+            result = ComputeBlurredBrush(bitmap);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("Artwork blur failed", ex);
+        }
+        BlurCache.AddOrUpdate(bitmap, new StrongBox<Brush?>(result));
+        return result;
+    }
+
+    private static Brush? ComputeBlurredBrush(BitmapSource bitmap)
+    {
+        if (bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0) return null;
+
+        // Two-step downscale (≈24 px, then 5 px) averages the whole cover instead of point-sampling it.
+        BitmapSource src = bitmap;
+        var s1 = Math.Min(1.0, 24.0 / Math.Max(bitmap.PixelWidth, bitmap.PixelHeight));
+        if (s1 < 1.0) src = new TransformedBitmap(src, new ScaleTransform(s1, s1));
+        src = new TransformedBitmap(src, new ScaleTransform((double)BlurSize / src.PixelWidth, (double)BlurSize / src.PixelHeight));
+        if (src.Format != PixelFormats.Bgra32) src = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+
+        var w = src.PixelWidth;
+        var h = src.PixelHeight;
+        if (w <= 0 || h <= 0) return null;
+        var stride = w * 4;
+        var pixels = new byte[stride * h];
+        src.CopyPixels(pixels, stride, 0);
+
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            double b = pixels[i] / 255.0, g = pixels[i + 1] / 255.0, r = pixels[i + 2] / 255.0;
+            RgbToHsv(r, g, b, out var hue, out var sat, out var val);
+            sat = Math.Clamp(sat * 1.35, 0, 0.9);
+            val = Math.Clamp(Math.Max(val * 1.15, 0.75), 0, 1);
+            HsvToRgb(hue, sat, val, out r, out g, out b);
+            pixels[i] = ToByte(b);
+            pixels[i + 1] = ToByte(g);
+            pixels[i + 2] = ToByte(r);
+            pixels[i + 3] = 255;
+        }
+
+        var image = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+        image.Freeze();
+        var brush = new ImageBrush(image) { Stretch = Stretch.Fill };
+        RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.Linear);
+        brush.Freeze();
+        return brush;
+    }
+
     private static Color? Compute(BitmapSource bitmap)
     {
         if (bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0) return null;

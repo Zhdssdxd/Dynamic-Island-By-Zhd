@@ -121,13 +121,16 @@ public static class IslandLayout
     public static bool IsCompactLike(IslandViewKind kind) => kind is IslandViewKind.Idle or IslandViewKind.CompactMusic
         or IslandViewKind.CompactVideo or IslandViewKind.CompactTimer or IslandViewKind.CompactDownload;
 
-    /// <summary>Target geometry for a view. <paramref name="notificationHeight"/> measures a notification banner.</summary>
+    /// <summary>
+    /// Target geometry for a view. <paramref name="notificationHeight"/> measures a notification banner;
+    /// <paramref name="compactHeight"/> &gt; 0 overrides the compact height (top-bar mode: exactly the bar's height).
+    /// </summary>
     public static IslandGeometry Measure(IslandViewKind kind, IslandState s, Func<IslandNotification, double>? notificationHeight = null,
-        bool hasLyrics = false)
+        bool hasLyrics = false, double compactHeight = 0)
     {
         var a = s.Settings.Appearance;
         var cw = a.CompactWidth;
-        var ch = a.CompactHeight;
+        var ch = compactHeight > 0 ? compactHeight : a.CompactHeight;
         var badge = s.SecondaryActivity != IslandActivity.None && s.SecondaryActivity != s.Activity ? SecondaryBadgeExtra : 0;
 
         Size size;

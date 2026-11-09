@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using WindowsDynamicIsland.Animation;
+using WindowsDynamicIsland.Audio;
 using WindowsDynamicIsland.Core;
 using WindowsDynamicIsland.Core.Models;
 using WindowsDynamicIsland.Settings;
@@ -27,6 +28,10 @@ public partial class IslandWindow : Window
     private const string RadiusKey = "island.radius";
     private const string OpacityKey = "island.opacity";
     private const string HoverKey = "island.hover";
+    private const string FillKey = "island.fill";
+
+    /// <summary>Bar height used in top-bar mode when nothing is docked on top and no height is set.</summary>
+    private const double DefaultTopBarHeight = 32;
 
     private static readonly TimeSpan CollapseAfterLeave = TimeSpan.FromSeconds(2.5);
     private static readonly TimeSpan CollapseWithoutMouse = TimeSpan.FromSeconds(5);
@@ -55,11 +60,24 @@ public partial class IslandWindow : Window
     private bool _closed;
     private string _placementSignature = "";
 
+    // Top-bar mode: compact height = bar height; optional outline-only (transparent) compact capsule.
+    private double _topBarHeight;
+    private SolidColorBrush? _fillBrush;
+    private Color _fillColor = Colors.Black;
+    private double _fillOpacity = 1;
+    private double _fillAmount = 1; // 1 = solid capsule, 0 = outline only
+    private Brush? _defaultStroke;
+    private static readonly Brush OutlineStroke = CreateFrozenBrush(Color.FromArgb(0x5C, 0xFF, 0xFF, 0xFF));
+
     // Beat pulse (bottom edge bounces to the music while expanded).
     private const double BeatMaxOffset = 7;
     private const double BeatBreathing = 1.5;
     private const double WaveBandAmplitude = 5;
     private const int WavePoints = 48;
+    /// <summary>Frequency heard at the centre of the bottom wave (bass) …</summary>
+    private const double WaveCenterHz = 55;
+    /// <summary>… and at its ends near the corners; in between the axis is logarithmic, like the iPhone.</summary>
+    private const double WaveEdgeHz = 6000;
     private readonly float[] _waveLevels = new float[WavePoints + 1];
     private readonly PathFigure _waveFigure = new() { IsClosed = true, IsFilled = true };
     private readonly PolyLineSegment _waveSegment = new();
@@ -96,6 +114,7 @@ public partial class IslandWindow : Window
         };
 
         ClipHost.Clip = _clip;
+        _defaultStroke = Capsule.BorderBrush;
 
         // Reusable wave geometry: start point + right top corner + (WavePoints + 1) wave points, updated in place.
         for (var i = 0; i < WavePoints + 2; i++) _waveSegment.Points.Add(new Point());
@@ -189,8 +208,17 @@ public partial class IslandWindow : Window
         {
             var s = _controller.State.Settings;
             var a = s.Appearance;
-            var windowOffset = Math.Max(0, a.TopOffset - IslandLayout.ShadowRoom);
-            var capsuleTop = a.TopOffset - windowOffset;
+            var topBar = a.TopBarMode;
+            var topOffset = topBar ? 0 : a.TopOffset;
+            var windowOffset = Math.Max(0, topOffset - IslandLayout.ShadowRoom);
+            var capsuleTop = topOffset - windowOffset;
+
+            var barHeight = topBar ? ResolveTopBarHeight(s) : 0;
+            if (Math.Abs(barHeight - _topBarHeight) > 0.1)
+            {
+                _topBarHeight = barHeight;
+                UpdateLayoutForState(force: false);
+            }
 
             CapsuleHost.Margin = a.HorizontalPosition switch
             {
@@ -211,7 +239,7 @@ public partial class IslandWindow : Window
                 _ => new Point(0.5, 0),
             };
 
-            var p = WindowPlacement.Compute(s, IslandLayout.HostWidth, IslandLayout.HostHeight, windowOffset);
+            var p = WindowPlacement.Compute(s, IslandLayout.HostWidth, IslandLayout.HostHeight, windowOffset, topBar);
             var signature = $"{p.X},{p.Y},{p.Width},{p.Height}";
             if (!force && signature == _placementSignature) return;
             _placementSignature = signature;
@@ -223,6 +251,26 @@ public partial class IslandWindow : Window
         {
             Log.Warn("Island reposition failed", ex);
         }
+    }
+
+    /// <summary>Bar height in DIPs: the user's value, else what is docked on top, else <see cref="DefaultTopBarHeight"/>.</summary>
+    private static double ResolveTopBarHeight(AppSettings s)
+    {
+        var h = s.Appearance.TopBarHeight;
+        if (h <= 0)
+        {
+            try
+            {
+                h = WindowPlacement.GetTopBarHeightDip(s);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Top bar detection failed", ex);
+                h = 0;
+            }
+        }
+        if (h <= 0) h = DefaultTopBarHeight;
+        return Math.Round(Math.Clamp(h, 16, 60));
     }
 
     // ───────────────────────────── State → layout ─────────────────────────────
@@ -271,7 +319,7 @@ public partial class IslandWindow : Window
         var state = _controller.State;
         var kind = _vm.ViewKind;
         var key = IslandLayout.ViewKey(kind, state);
-        var target = IslandLayout.Measure(kind, state, MeasureNotification, _vm.HasLyrics);
+        var target = IslandLayout.Measure(kind, state, MeasureNotification, _vm.HasLyrics, _topBarHeight);
 
         var previousKind = _currentKind;
         var contentChanged = force || key != _currentKey;
@@ -296,6 +344,7 @@ public partial class IslandWindow : Window
         _geometryInitialized = true;
 
         Capsule.IsHitTestVisible = kind != IslandViewKind.Hidden;
+        UpdateCapsuleFill(kind, animate: true);
         UpdateBeatPulse();
         if (kind is IslandViewKind.Hidden or IslandViewKind.Notification or IslandViewKind.Indicator) ResetHover();
 
@@ -398,15 +447,56 @@ public partial class IslandWindow : Window
     private void ApplyAppearance()
     {
         var a = _controller.State.Settings.Appearance;
-        var baseColor = a.ColorScheme == IslandColorScheme.Graphite
+        _fillColor = a.ColorScheme == IslandColorScheme.Graphite
             ? (TryFindResource("GraphiteColor") is Color g ? g : Color.FromRgb(0x0E, 0x0E, 0x10))
             : Colors.Black;
-        var alpha = (byte)Math.Round(Math.Clamp(a.Opacity, 0.5, 1.0) * 255);
-        var brush = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
-        brush.Freeze();
-        Capsule.Background = brush;
-        WavePath.Fill = brush;
-        CapsuleShadow.Opacity = 0.45 * a.Opacity;
+        _fillOpacity = Math.Clamp(a.Opacity, 0.5, 1.0);
+        if (_fillBrush is null)
+        {
+            // One live (unfrozen) brush for the capsule and the beat wave, so top-bar mode can fade it in and out.
+            _fillBrush = new SolidColorBrush(Colors.Black);
+            Capsule.Background = _fillBrush;
+            WavePath.Fill = _fillBrush;
+        }
+        UpdateCapsuleFill(_vm.ViewKind, animate: false);
+    }
+
+    /// <summary>
+    /// Solid capsule normally; in top-bar mode with <see cref="TopBarFill.Outline"/> the compact capsule turns transparent
+    /// (only the outline stays, blending with the bar) and fades back to solid when it expands. A 1/255 alpha floor keeps
+    /// the capsule clickable (fully transparent pixels of a layered window are click-through).
+    /// </summary>
+    private void UpdateCapsuleFill(IslandViewKind kind, bool animate)
+    {
+        if (_fillBrush is null) return;
+        var a = _controller.State.Settings.Appearance;
+        var outline = a.TopBarMode && a.TopBarFill == TopBarFill.Outline
+                      && (IslandLayout.IsCompactLike(kind) || kind == IslandViewKind.Hidden);
+        Capsule.BorderBrush = outline ? OutlineStroke : _defaultStroke;
+        var target = outline ? 0.0 : 1.0;
+        if (animate && _geometryInitialized)
+            AnimationEngine.Instance.Animate(FillKey, _fillAmount, target, SetFillAmount, SpringPresets.Gentle);
+        else
+        {
+            AnimationEngine.Instance.Stop(FillKey);
+            SetFillAmount(target);
+        }
+    }
+
+    private void SetFillAmount(double v)
+    {
+        _fillAmount = Math.Clamp(v, 0, 1);
+        if (_fillBrush is null) return;
+        var alpha = Math.Max(1.0 / 255, _fillOpacity * _fillAmount);
+        _fillBrush.Color = Color.FromArgb((byte)Math.Round(alpha * 255), _fillColor.R, _fillColor.G, _fillColor.B);
+        CapsuleShadow.Opacity = 0.45 * _fillOpacity * _fillAmount;
+    }
+
+    private static Brush CreateFrozenBrush(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
     }
 
     // ───────────────────────────── Beat pulse ─────────────────────────────
@@ -458,8 +548,8 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
-    /// Per frame: bass energy (lowest bands, ~40–150 Hz) vs. its running average detects beats; the spectrum shapes the
-    /// wave (bass in the middle, highs toward the corners) and the wave travels along the bottom edge, faster on beats.
+    /// Per frame: bass energy (peak of 40–150 Hz) vs. its running average detects beats; the spectrum shapes the
+    /// wave on a logarithmic frequency axis (bass in the middle, highs toward the corners) and the wave travels along the bottom edge, faster on beats.
     /// </summary>
     private void OnBeatFrame(object? sender, EventArgs e)
     {
@@ -474,7 +564,7 @@ public partial class IslandWindow : Window
         var haveBands = _beatWanted && ServiceRegistry.Get<ISpectrumSource>() is { } source && source.TryGetBands(_beatBands, out _);
         if (haveBands)
         {
-            var bass = (_beatBands[0] + _beatBands[1] + _beatBands[2] + _beatBands[3] + _beatBands[4]) / 5.0;
+            double bass = SpectrumShaper.PeakBetween(_beatBands, SpectrumShaper.MinHz, SpectrumShaper.BassHighHz);
             _bassAverage += (bass - _bassAverage) * 0.05;
             kick = Math.Clamp((bass - _bassAverage * 1.08) / 0.22, 0, 1);
             target = BeatMaxOffset * kick + BeatBreathing * bass;
@@ -491,11 +581,9 @@ public partial class IslandWindow : Window
             float v = 0;
             if (haveBands)
             {
-                var t = Math.Abs(2.0 * i / WavePoints - 1) * 20;
-                var lo = (int)t;
-                var hi = Math.Min(lo + 1, _beatBands.Length - 1);
-                var frac = (float)(t - lo);
-                v = _beatBands[lo] + (_beatBands[hi] - _beatBands[lo]) * frac;
+                // 0 at the centre → 1 at the corners, mapped onto a logarithmic frequency axis.
+                var d = Math.Abs(2.0 * i / WavePoints - 1);
+                v = SpectrumShaper.SampleAt(_beatBands, WaveCenterHz * Math.Pow(WaveEdgeHz / WaveCenterHz, d));
             }
             var current = _waveLevels[i];
             current += (v - current) * (v > current ? 0.5f : 0.15f);
@@ -680,7 +768,7 @@ public partial class IslandWindow : Window
         UnhookBeat();
         _beatConsumer?.Dispose();
         _beatConsumer = null;
-        foreach (var key in new[] { WidthKey, HeightKey, RadiusKey, OpacityKey, HoverKey })
+        foreach (var key in new[] { WidthKey, HeightKey, RadiusKey, OpacityKey, HoverKey, FillKey })
             AnimationEngine.Instance.Stop(key);
         if (_winEventHook != IntPtr.Zero)
         {

@@ -168,6 +168,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         new SettingsOption("Адаптивный", IslandColorScheme.Adaptive),
     };
 
+    public IReadOnlyList<SettingsOption> TopBarFillOptions { get; } = new[]
+    {
+        new SettingsOption("Чёрная", global::WindowsDynamicIsland.Settings.TopBarFill.Black),
+        new SettingsOption("Только контур", global::WindowsDynamicIsland.Settings.TopBarFill.Outline),
+    };
+
     public IReadOnlyList<SettingsOption> PositionOptions { get; } = new[]
     {
         new SettingsOption("Слева", IslandHorizontalPosition.Left),
@@ -303,6 +309,55 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         get => _pulseToBeat;
         set => Set(ref _pulseToBeat, value, (s, v) => s.Appearance.PulseToBeat = v);
     }
+
+    private bool _compactWave;
+    public bool CompactWave
+    {
+        get => _compactWave;
+        set => Set(ref _compactWave, value, (s, v) => s.Appearance.CompactWave = v);
+    }
+
+    private bool _expandedWave;
+    public bool ExpandedWave
+    {
+        get => _expandedWave;
+        set => Set(ref _expandedWave, value, (s, v) => s.Appearance.ExpandedWave = v);
+    }
+
+    private bool _waveArtworkColors;
+    public bool WaveArtworkColors
+    {
+        get => _waveArtworkColors;
+        set => Set(ref _waveArtworkColors, value, (s, v) => s.Appearance.WaveArtworkColors = v);
+    }
+
+    private bool _topBarMode;
+    public bool TopBarMode
+    {
+        get => _topBarMode;
+        set => Set(ref _topBarMode, value, (s, v) => s.Appearance.TopBarMode = v);
+    }
+
+    private TopBarFill _topBarFill;
+    public TopBarFill TopBarFill
+    {
+        get => _topBarFill;
+        set => Set(ref _topBarFill, value, (s, v) => s.Appearance.TopBarFill = v);
+    }
+
+    private double _topBarHeight;
+    public double TopBarHeight
+    {
+        get => _topBarHeight;
+        set
+        {
+            Set(ref _topBarHeight, value, (s, v) => s.Appearance.TopBarHeight = v, true);
+            OnPropertyChanged(nameof(TopBarHeightText));
+        }
+    }
+
+    /// <summary>"авто" for 0, otherwise the height in px.</summary>
+    public string TopBarHeightText => TopBarHeight <= 0 ? "авто" : $"{TopBarHeight:0} px";
 
     public bool ExpandOnHover
     {
@@ -699,6 +754,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ShowWhenIdle = a.ShowWhenIdle;
             ExpandOnHover = a.ExpandOnHover;
             PulseToBeat = a.PulseToBeat;
+            CompactWave = a.CompactWave;
+            ExpandedWave = a.ExpandedWave;
+            WaveArtworkColors = a.WaveArtworkColors;
+            TopBarMode = a.TopBarMode;
+            TopBarFill = a.TopBarFill;
+            TopBarHeight = a.TopBarHeight;
 
             var f = s.Features;
             NotificationsEnabled = f.NotificationsEnabled;

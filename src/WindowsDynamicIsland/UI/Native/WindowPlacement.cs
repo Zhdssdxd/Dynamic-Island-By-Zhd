@@ -16,7 +16,9 @@ internal static class WindowPlacement
     /// <param name="hostWidthDip">Host window width in DIPs.</param>
     /// <param name="hostHeightDip">Host window height in DIPs.</param>
     /// <param name="windowTopOffsetDip">Gap between the monitor top edge and the window top (DIPs, ≥ 0).</param>
-    public static PlacementResult Compute(AppSettings settings, double hostWidthDip, double hostHeightDip, double windowTopOffsetDip)
+    /// <param name="overTopBar">Top-bar mode: start at the monitor's top edge even when a bar is docked there.</param>
+    public static PlacementResult Compute(AppSettings settings, double hostWidthDip, double hostHeightDip, double windowTopOffsetDip,
+        bool overTopBar = false)
     {
         var screen = FindScreen(settings.System.MonitorDeviceName);
         int left, top, right, width;
@@ -37,8 +39,8 @@ internal static class WindowPlacement
             left = bounds.Left;
             right = bounds.Right;
             width = bounds.Width;
-            // Taskbar docked on top → start below it.
-            top = work.Top > bounds.Top ? work.Top : bounds.Top;
+            // Taskbar docked on top → start below it (unless the island is meant to sit inside that bar).
+            top = !overTopBar && work.Top > bounds.Top ? work.Top : bounds.Top;
             device = screen.DeviceName;
         }
 
@@ -56,6 +58,21 @@ internal static class WindowPlacement
         };
         var y = top + (int)Math.Round(Math.Max(0, windowTopOffsetDip) * scale);
         return new PlacementResult(x, y, w, h, scale, device);
+    }
+
+    /// <summary>
+    /// Height (DIPs) of whatever is docked at the top of the island's monitor — the gap between the monitor's top edge
+    /// and its work area (taskbar on top, AppBar-style top bars). 0 when nothing reserves space there.
+    /// </summary>
+    public static double GetTopBarHeightDip(AppSettings settings)
+    {
+        var screen = FindScreen(settings.System.MonitorDeviceName);
+        if (screen is null) return 0;
+        var bounds = screen.Bounds;
+        var gap = screen.WorkingArea.Top - bounds.Top;
+        if (gap <= 0) return 0;
+        var scale = GetScale(bounds.Left + bounds.Width / 2, bounds.Top + 1);
+        return gap / (scale > 0 ? scale : 1.0);
     }
 
     private static Forms.Screen? FindScreen(string deviceName)

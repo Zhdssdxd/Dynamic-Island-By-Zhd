@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS  Publishes DynamicIsland.exe to artifacts\publish.
 .DESCRIPTION
   Default: self-contained single-file x64 exe (no .NET runtime needed on the target PC).

@@ -136,6 +136,9 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     private string _elapsedText = "";
     private string _remainingText = "";
     private Brush _accentBrush;
+    private Brush _waveBrush = Brushes.White;
+    private bool _showCompactWave;
+    private bool _showExpandedWave;
     private double _visualizerOpacity = 1;
     private bool _showPlayingBars;
     private string _playbackStateGlyph = Glyphs.Play;
@@ -161,6 +164,12 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     public string RemainingText { get => _remainingText; private set => SetProperty(ref _remainingText, value); }
     /// <summary>White, or the album-art tint when ColorScheme == Adaptive.</summary>
     public Brush AccentBrush { get => _accentBrush; private set => SetProperty(ref _accentBrush, value); }
+    /// <summary>Brush for the sound waves: a heavily blurred, colour-lifted album cover, or <see cref="AccentBrush"/>.</summary>
+    public Brush WaveBrush { get => _waveBrush; private set => SetProperty(ref _waveBrush, value); }
+    /// <summary>Compact music wave visible: playing, visualizer on, wave enabled in settings.</summary>
+    public bool ShowCompactWave { get => _showCompactWave; private set => SetProperty(ref _showCompactWave, value); }
+    /// <summary>Expanded music background wave visible: playing, visualizer on, wave enabled in settings.</summary>
+    public bool ShowExpandedWave { get => _showExpandedWave; private set => SetProperty(ref _showExpandedWave, value); }
     /// <summary>1 while playing, dimmed while paused (bars decay to rest).</summary>
     public double VisualizerOpacity { get => _visualizerOpacity; private set => SetProperty(ref _visualizerOpacity, value); }
     /// <summary>Visualizer enabled AND media playing (compact video shows bars only then).</summary>
@@ -444,6 +453,13 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
             }
             AccentBrush = accent;
         }
+
+        var appearance = settings.Appearance;
+        WaveBrush = appearance.WaveArtworkColors && ArtworkColorExtractor.GetBlurredBrush(m?.Thumbnail) is { } blurred
+            ? blurred
+            : AccentBrush;
+        ShowCompactWave = ShowPlayingBars && appearance.CompactWave;
+        ShowExpandedWave = ShowPlayingBars && appearance.ExpandedWave;
 
         // Session switcher.
         var sessions = State.MediaSessions;

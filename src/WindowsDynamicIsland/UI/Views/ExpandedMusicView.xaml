@@ -22,9 +22,9 @@
                                  IsHitTestVisible="False"
                                  Mode="Waveform"
                                  IsActive="{Binding State.IsVisualizerActive}"
-                                 BarBrush="{Binding AccentBrush}"
-                                 Opacity="0.14"
-                                 Visibility="{Binding ShowPlayingBars, Converter={StaticResource BoolToVisibility}}" />
+                                 BarBrush="{Binding WaveBrush}"
+                                 Opacity="0.32"
+                                 Visibility="{Binding ShowExpandedWave, Converter={StaticResource BoolToVisibility}}" />
 
         <!-- ── Row 0: artwork · title/artist/source · visualizer ── -->
         <Grid>

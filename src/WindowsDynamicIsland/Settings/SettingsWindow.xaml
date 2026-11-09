@@ -234,6 +234,29 @@
                         </StackPanel>
                     </HeaderedContentControl>
 
+                    <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Верхняя панель" />
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Встроить в верхнюю панель"
+                                            Tag="Свёрнутый остров встаёт в самый верх экрана и по высоте ровно как панель сверху (панель задач сверху, YASB, верхний бар как в macOS)">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding TopBarMode}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Заливка в панели"
+                                            Tag="«Только контур» — свёрнутый остров прозрачный и сливается с панелью, видна только окантовка"
+                                            IsEnabled="{Binding TopBarMode}">
+                        <ComboBox Style="{StaticResource SettingsComboBox}"
+                                  ItemsSource="{Binding TopBarFillOptions}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding TopBarFill}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Высота панели"
+                                            Tag="0 — определить автоматически (если панель не резервирует место, берётся 32 px)"
+                                            IsEnabled="{Binding TopBarMode}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource SettingsValueText}" Text="{Binding TopBarHeightText}" />
+                            <Slider Style="{StaticResource SettingsSlider}" Minimum="0" Maximum="60" SmallChange="1" LargeChange="2"
+                                    TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding TopBarHeight}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+
                     <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Поведение" />
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Показывать в простое" Tag="Маленькая капсула видна, даже когда ничего не происходит">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWhenIdle}" />
@@ -244,6 +267,18 @@
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна под бит"
                                             Tag="Низ раскрытого острова становится волной в такт музыке и видео (нужен включённый визуализатор)">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding PulseToBeat}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна в свёрнутом острове"
+                                            Tag="Живая волна между обложкой и полосками, пока играет музыка">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CompactWave}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна в раскрытом острове"
+                                            Tag="Мягкая волна вдоль нижней части раскрытого плеера">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ExpandedWave}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна цвета обложки"
+                                            Tag="Волна закрашивается сильно размытой обложкой трека вместо белого">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WaveArtworkColors}" />
                     </HeaderedContentControl>
                 </StackPanel>
             </ScrollViewer>

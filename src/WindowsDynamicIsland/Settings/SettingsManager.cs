@@ -144,6 +144,8 @@ public sealed class SettingsManager : IDisposable
         a.AnimationSpeed = Clamp(a.AnimationSpeed, 0.5, 2.0, 1.0);
         a.TopOffset = Clamp(a.TopOffset, 0, 200, 6);
         a.HorizontalOffset = Clamp(a.HorizontalOffset, -2000, 2000, 0);
+        a.TopBarHeight = Clamp(a.TopBarHeight, 0, 80, 0);
+        if (!Enum.IsDefined(a.TopBarFill)) a.TopBarFill = TopBarFill.Black;
 
         var f = s.Features;
         f.NotificationDurationSeconds = Clamp(f.NotificationDurationSeconds, 2, 30, 5);
