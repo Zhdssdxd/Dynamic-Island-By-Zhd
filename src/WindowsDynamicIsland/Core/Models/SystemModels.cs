@@ -50,6 +50,8 @@ public enum IndicatorKind
     UsbDevice,
     Bluetooth,
     Microphone,
+    /// <summary>Something was copied (clipboard history).</summary>
+    Clipboard,
 }
 
 /// <summary>

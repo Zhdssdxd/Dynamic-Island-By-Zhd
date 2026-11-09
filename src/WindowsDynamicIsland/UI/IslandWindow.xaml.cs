@@ -70,9 +70,9 @@ public partial class IslandWindow : Window
     private static readonly Brush OutlineStroke = CreateFrozenBrush(Color.FromArgb(0x5C, 0xFF, 0xFF, 0xFF));
 
     // Beat pulse (bottom edge bounces to the music while expanded).
-    private const double BeatMaxOffset = 7;
-    private const double BeatBreathing = 1.5;
-    private const double WaveBandAmplitude = 5;
+    private const double BeatMaxOffset = 12;
+    private const double BeatBreathing = 2.5;
+    private const double WaveBandAmplitude = 6;
     private const int WavePoints = 48;
     /// <summary>Frequency heard at the centre of the bottom wave (bass) …</summary>
     private const double WaveCenterHz = 55;
@@ -739,6 +739,7 @@ public partial class IslandWindow : Window
         }
 
         menu.Items.Add(new Separator());
+        menu.Items.Add(Item("История буфера обмена", Glyphs.Copy, _vm.OpenClipboardHistoryCommand));
         menu.Items.Add(Item("Настройки…", Glyphs.Settings, _vm.OpenSettingsCommand));
         menu.Items.Add(Item("Скрыть остров", Glyphs.Close, _vm.HideIslandCommand));
         menu.Items.Add(new Separator());

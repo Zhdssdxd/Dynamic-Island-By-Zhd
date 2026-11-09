@@ -108,6 +108,12 @@ public sealed class FeatureSettings
     /// </summary>
     public string VisualizerDeviceId { get; set; } = "";
     public bool DownloadsEnabled { get; set; } = true;
+    /// <summary>Remember copied text / images / files and show them in the clipboard history window.</summary>
+    public bool ClipboardHistoryEnabled { get; set; } = true;
+    /// <summary>How many unpinned items the history keeps (10..200).</summary>
+    public int ClipboardMaxItems { get; set; } = 50;
+    /// <summary>Show a short "Скопировано" indicator in the island on every copy.</summary>
+    public bool ClipboardIndicator { get; set; } = true;
     /// <summary>Folder watched for downloads; empty = the user's Downloads known folder.</summary>
     public string DownloadsFolder { get; set; } = "";
 }
@@ -159,4 +165,5 @@ public sealed class HotkeySettings
     public string MediaPlayPause { get; set; } = "Ctrl+Alt+P";
     public string StartStopwatch { get; set; } = "Ctrl+Alt+T";
     public string OpenSettings { get; set; } = "Ctrl+Alt+S";
+    public string ClipboardHistory { get; set; } = "Ctrl+Alt+V";
 }

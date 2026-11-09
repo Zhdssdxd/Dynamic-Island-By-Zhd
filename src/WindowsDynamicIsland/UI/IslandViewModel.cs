@@ -83,6 +83,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         });
 
         OpenSettingsCommand = new RelayCommand(() => _bus.Publish(new OpenSettingsRequested()));
+        OpenClipboardHistoryCommand = new RelayCommand(() => _bus.Publish(new OpenClipboardHistoryRequested()));
         ExitCommand = new RelayCommand(() => _bus.Publish(new ExitRequested()));
         HideIslandCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleVisibility)));
         DismissCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.DismissTransient)));
@@ -110,6 +111,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     /// <summary>Parameter: double minutes.</summary>
     public ICommand StartTimerCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+    public ICommand OpenClipboardHistoryCommand { get; }
     public ICommand ExitCommand { get; }
     public ICommand HideIslandCommand { get; }
     public ICommand DismissCommand { get; }

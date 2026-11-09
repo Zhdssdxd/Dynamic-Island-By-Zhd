@@ -1,0 +1,141 @@
+<Window x:Class="WindowsDynamicIsland.ClipboardHistory.ClipboardHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:m="clr-namespace:WindowsDynamicIsland.Core.Models"
+        Title="История буфера обмена"
+        Width="440"
+        Height="620"
+        MinWidth="360"
+        MinHeight="380"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        ResizeMode="CanResize"
+        Icon="pack://application:,,,/DynamicIsland;component/Assets/island.ico"
+        Background="#FF202020"
+        Foreground="White"
+        Language="ru-RU"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/DynamicIsland;component/Settings/SettingsStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource SettingsCardBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource SettingsCardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="12,10,8,10" />
+                <Setter Property="Margin" Value="0,0,0,8" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{StaticResource SettingsCardHoverBrush}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="CardIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+                <Setter Property="Width" Value="28" />
+                <Setter Property="MinWidth" Value="28" />
+                <Setter Property="Height" Value="28" />
+                <Setter Property="MinHeight" Value="28" />
+                <Setter Property="Margin" Value="2,0,0,0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Cursor" Value="Arrow" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="16,14,16,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Margin="2,0,0,12">
+            <TextBlock Text="История буфера обмена"
+                       FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimaryBrush}" />
+            <TextBlock Margin="0,4,0,0" Style="{StaticResource SettingsCaptionText}" TextWrapping="Wrap"
+                       Text="Щелчок по записи — вставить туда, где ты печатал. Кнопка копирования — только скопировать." />
+        </StackPanel>
+
+        <!-- Search -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <TextBox x:Name="SearchBox" Style="{StaticResource SettingsTextBox}" Padding="30,0,8,0"
+                     TextChanged="SearchBox_TextChanged" />
+            <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                       FontFamily="{StaticResource IconFont}" FontSize="12"
+                       Foreground="{StaticResource TextSecondaryBrush}" Text="{x:Static m:Glyphs.Search}" />
+            <TextBlock x:Name="SearchPlaceholder" Margin="31,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                       Style="{StaticResource SettingsCaptionText}" FontSize="13" Text="Поиск" />
+        </Grid>
+
+        <!-- Items -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <ItemsControl x:Name="ItemsList" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type m:ClipboardEntry}">
+                        <Border Style="{StaticResource CardStyle}" MouseLeftButtonUp="Card_MouseLeftButtonUp"
+                                ToolTip="Вставить в предыдущее окно">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Margin="0,2,0,0" VerticalAlignment="Top"
+                                           FontFamily="{StaticResource IconFont}" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding KindGlyph}" />
+
+                                <StackPanel Grid.Column="1" Margin="4,0,8,0">
+                                    <Image Source="{Binding Image}" MaxHeight="110" HorizontalAlignment="Left" Stretch="Uniform"
+                                           Margin="0,0,0,6"
+                                           Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibility}}" />
+                                    <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               MaxHeight="76" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Margin="0,5,0,0" Style="{StaticResource SettingsCaptionText}" Text="{Binding Meta}" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Style="{StaticResource CardIconButton}" Content="{x:Static m:Glyphs.Copy}"
+                                            ToolTip="Только скопировать" Click="Copy_Click" />
+                                    <Button x:Name="PinButton" Style="{StaticResource CardIconButton}" Content="{Binding PinGlyph}"
+                                            ToolTip="Закрепить" Click="Pin_Click" />
+                                    <Button Style="{StaticResource CardIconButton}" Content="{x:Static m:Glyphs.Delete}"
+                                            ToolTip="Удалить" Click="Delete_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                <Setter TargetName="PinButton" Property="Foreground" Value="{StaticResource AccentBlueBrush}" />
+                                <Setter TargetName="PinButton" Property="ToolTip" Value="Открепить" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock x:Name="EmptyText" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextAlignment="Center" TextWrapping="Wrap" Style="{StaticResource SettingsCaptionText}" FontSize="13"
+                   Text="Пока пусто — скопируй что-нибудь, и оно появится здесь" />
+
+        <!-- Footer -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <TextBlock x:Name="FooterText" VerticalAlignment="Center" Style="{StaticResource SettingsCaptionText}" />
+            <Button HorizontalAlignment="Right" Style="{StaticResource SecondaryButton}" Content="Очистить"
+                    ToolTip="Удалить всё, кроме закреплённых" Click="Clear_Click" />
+        </Grid>
+    </Grid>
+</Window>

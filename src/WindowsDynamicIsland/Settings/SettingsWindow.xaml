@@ -355,6 +355,28 @@
                             <Button Style="{StaticResource SecondaryButton}" Content="Обзор…" Click="BrowseDownloads_Click" />
                         </StackPanel>
                     </HeaderedContentControl>
+
+                    <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Буфер обмена" />
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="История буфера обмена"
+                                            Tag="Запоминает скопированный текст, картинки и файлы. Открывается горячей клавишей (Ctrl+Alt+V) или из меню острова">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource SecondaryButton}" Content="Открыть" Margin="0,0,12,0"
+                                    Command="{Binding OpenClipboardHistoryCommand}" />
+                            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClipboardHistoryEnabled}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="«Скопировано» в острове"
+                                            Tag="Короткий индикатор в острове при каждом копировании" IsEnabled="{Binding ClipboardHistoryEnabled}">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClipboardIndicator}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Сколько хранить"
+                                            Tag="Закреплённые записи не удаляются и сохраняются между запусками" IsEnabled="{Binding ClipboardHistoryEnabled}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource SettingsValueText}" Text="{Binding ClipboardMaxItems, StringFormat='{}{0:0}'}" />
+                            <Slider Style="{StaticResource SettingsSlider}" Minimum="10" Maximum="200" SmallChange="5" LargeChange="10"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" Value="{Binding ClipboardMaxItems}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
                 </StackPanel>
             </ScrollViewer>
 

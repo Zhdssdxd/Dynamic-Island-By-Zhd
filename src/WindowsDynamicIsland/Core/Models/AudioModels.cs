@@ -8,6 +8,8 @@ public enum VisualizerStyle
     Waveform,
     /// <summary>A few minimal rounded bars (compact live-activity look).</summary>
     MinimalBars,
+    /// <summary>Layered flowing waves rising from the bottom, driven by the bass (expanded island background).</summary>
+    BassWave,
 }
 
 /// <summary>

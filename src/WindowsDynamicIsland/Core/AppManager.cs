@@ -1,6 +1,7 @@
 using System.Windows;
 using WindowsDynamicIsland.Animation;
 using WindowsDynamicIsland.Audio;
+using WindowsDynamicIsland.ClipboardHistory;
 using WindowsDynamicIsland.Core.Models;
 using WindowsDynamicIsland.Downloads;
 using WindowsDynamicIsland.Media;
@@ -27,6 +28,8 @@ public sealed class AppManager : IAsyncDisposable
     private ModuleStatusRegistry? _statusRegistry;
     private IslandWindow? _island;
     private SettingsWindow? _settingsWindow;
+    private ClipboardHistoryManager? _clipboard;
+    private ClipboardHistoryWindow? _clipboardWindow;
     private TrayIcon? _tray;
     private bool _disposed;
 
@@ -71,12 +74,15 @@ public sealed class AppManager : IAsyncDisposable
         _modules.Register(new MicrophoneMonitor(_bus, _settings));
         _modules.Register(new FullscreenMonitor(_bus, _settings));
         _modules.Register(new DownloadMonitor(_bus, _settings));
+        _clipboard = new ClipboardHistoryManager(_bus, _settings);
+        _modules.Register(_clipboard);
         _modules.Register(new TimerManager(_bus, _settings));
         _modules.Register(new HotkeyManager(_bus, _settings));
         _modules.Register(new AutostartManager(_bus, _settings));
 
         // ── Shell
         _subs.Add(_bus.Subscribe<OpenSettingsRequested>(_ => ShowSettings(), onUiThread: true));
+        _subs.Add(_bus.Subscribe<OpenClipboardHistoryRequested>(_ => ShowClipboardHistory(), onUiThread: true));
         _subs.Add(_bus.Subscribe<ExitRequested>(e => _ = _app.ShutdownAppAsync(), onUiThread: true));
 
         _island = new IslandWindow(_controller, _settings);
@@ -121,6 +127,31 @@ public sealed class AppManager : IAsyncDisposable
         BringToFront(_settingsWindow);
     }
 
+    /// <summary>Opens (or focuses) the clipboard history window; remembers the window the user was typing in.</summary>
+    public void ShowClipboardHistory()
+    {
+        if (_disposed || _clipboard is null) return;
+        var previous = GetForegroundWindow();
+        if (previous != IntPtr.Zero)
+        {
+            GetWindowThreadProcessId(previous, out var pid);
+            if (pid == (uint)Environment.ProcessId) previous = IntPtr.Zero; // the island / our own windows
+        }
+
+        if (_clipboardWindow is null)
+        {
+            _clipboardWindow = new ClipboardHistoryWindow(_clipboard);
+            _clipboardWindow.Closed += (_, _) => _clipboardWindow = null;
+        }
+        _clipboardWindow.ShowFor(previous);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
     /// <summary>
     /// Windows' focus-steal protection ignores Activate() when another process owns the foreground
     /// (e.g. the settings were opened from a hotkey or a second launch). A brief Topmost toggle raises the window anyway.
@@ -141,6 +172,7 @@ public sealed class AppManager : IAsyncDisposable
         _subs.Dispose();
 
         try { _settingsWindow?.Close(); } catch (Exception ex) { Log.Warn("Settings window close failed", ex); }
+        try { _clipboardWindow?.Close(); } catch (Exception ex) { Log.Warn("Clipboard window close failed", ex); }
         _tray?.Dispose();
 
         if (_modules is not null)

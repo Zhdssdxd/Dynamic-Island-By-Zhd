@@ -132,6 +132,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             new(nameof(HotkeySettings.MediaPlayPause), "Воспроизведение / пауза"),
             new(nameof(HotkeySettings.StartStopwatch), "Секундомер / пауза таймера"),
             new(nameof(HotkeySettings.OpenSettings), "Открыть настройки"),
+            new(nameof(HotkeySettings.ClipboardHistory), "История буфера обмена"),
         };
 
         StartTimerCommand = new RelayCommand(() => _bus.Publish(new TimerCommand(TimerCommandKind.StartCountdown)));
@@ -477,6 +478,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     private bool _downloadsEnabled;
+    private bool _clipboardHistoryEnabled;
+    public bool ClipboardHistoryEnabled
+    {
+        get => _clipboardHistoryEnabled;
+        set => Set(ref _clipboardHistoryEnabled, value, (s, v) => s.Features.ClipboardHistoryEnabled = v);
+    }
+
+    private bool _clipboardIndicator;
+    public bool ClipboardIndicator
+    {
+        get => _clipboardIndicator;
+        set => Set(ref _clipboardIndicator, value, (s, v) => s.Features.ClipboardIndicator = v);
+    }
+
+    private double _clipboardMaxItems;
+    public double ClipboardMaxItems
+    {
+        get => _clipboardMaxItems;
+        set => Set(ref _clipboardMaxItems, value, (s, v) => s.Features.ClipboardMaxItems = (int)Math.Round(v), true);
+    }
+
+    public ICommand OpenClipboardHistoryCommand => _openClipboardHistory ??= new RelayCommand(() => _bus.Publish(new OpenClipboardHistoryRequested()));
+    private ICommand? _openClipboardHistory;
+
     public bool DownloadsEnabled
     {
         get => _downloadsEnabled;
@@ -772,6 +797,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             VisualizerDeviceId = f.VisualizerDeviceId;
             VisualizerSensitivity = f.VisualizerSensitivity;
             DownloadsEnabled = f.DownloadsEnabled;
+            ClipboardHistoryEnabled = f.ClipboardHistoryEnabled;
+            ClipboardIndicator = f.ClipboardIndicator;
+            ClipboardMaxItems = f.ClipboardMaxItems;
             DownloadsFolder = f.DownloadsFolder;
 
             var i = s.Indicators;
@@ -899,6 +927,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         nameof(HotkeySettings.MediaPlayPause) => h.MediaPlayPause,
         nameof(HotkeySettings.StartStopwatch) => h.StartStopwatch,
         nameof(HotkeySettings.OpenSettings) => h.OpenSettings,
+        nameof(HotkeySettings.ClipboardHistory) => h.ClipboardHistory,
         _ => "",
     };
 
@@ -911,6 +940,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             case nameof(HotkeySettings.MediaPlayPause): h.MediaPlayPause = value; break;
             case nameof(HotkeySettings.StartStopwatch): h.StartStopwatch = value; break;
             case nameof(HotkeySettings.OpenSettings): h.OpenSettings = value; break;
+            case nameof(HotkeySettings.ClipboardHistory): h.ClipboardHistory = value; break;
         }
     }
 

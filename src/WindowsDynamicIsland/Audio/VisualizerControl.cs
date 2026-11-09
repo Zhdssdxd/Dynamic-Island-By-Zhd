@@ -76,6 +76,10 @@ public sealed class VisualizerControl : FrameworkElement
     private VisualizerStyle? _fadeFromMode;
     private double _crossfade = 1.0;
     private readonly BassPunch _punch = new();
+    private double _flowPhase;
+    private float _bassLevel;
+    private float _midLevel;
+    private float _highLevel;
     private Pen? _strokePen;
     private Brush? _strokePenBrush;
 
@@ -261,6 +265,7 @@ public sealed class VisualizerControl : FrameworkElement
         Array.Clear(_target);
         Array.Clear(_display);
         _punch.Reset();
+        _bassLevel = _midLevel = _highLevel = 0f;
         _fadeFromMode = null;
         _crossfade = 1.0;
         InvalidateVisual();
@@ -268,7 +273,7 @@ public sealed class VisualizerControl : FrameworkElement
 
     private bool IsAtRest()
     {
-        if (_punch.Value > SettleEpsilon) return false;
+        if (_punch.Value > SettleEpsilon || _bassLevel > SettleEpsilon || _midLevel > SettleEpsilon) return false;
         foreach (var v in _display)
             if (v > SettleEpsilon) return false;
         return true;
@@ -352,6 +357,26 @@ public sealed class VisualizerControl : FrameworkElement
             moving |= punch > SettleEpsilon;
         }
 
+        // BassWave: smoothed band groups + a phase that flows faster on kicks (animates every frame while playing).
+        if (Mode == VisualizerStyle.BassWave)
+        {
+            var span = (ReadOnlySpan<float>)_display;
+            var lowMid = SpectrumShaper.PeakBetween(span, 150, 600);
+            var high = SpectrumShaper.PeakBetween(span, 2000, 8000);
+            var k = (float)(1.0 - Math.Exp(-12.0 * dt));
+            _bassLevel += (bass - _bassLevel) * k;
+            _midLevel += (lowMid - _midLevel) * k;
+            _highLevel += (high - _highLevel) * k;
+            var energy = Math.Max(_bassLevel, Math.Max(_midLevel, punch));
+            if (polling || energy > SettleEpsilon)
+            {
+                _flowPhase += dt * (1.4 + 7.0 * punch);
+                if (_flowPhase > 1000) _flowPhase -= 1000;
+                changed = true;
+                moving |= energy > SettleEpsilon;
+            }
+        }
+
         if (_crossfade < 1.0)
         {
             _crossfade = Math.Min(1.0, _crossfade + dt / CrossfadeSeconds);
@@ -378,7 +403,12 @@ public sealed class VisualizerControl : FrameworkElement
             VisualizerStyle.Equalizer => count * 5.0,
             _ => 64.0,
         };
-        var height = mode == VisualizerStyle.MinimalBars ? 16.0 : 20.0;
+        var height = mode switch
+        {
+            VisualizerStyle.MinimalBars => 16.0,
+            VisualizerStyle.BassWave => 48.0,
+            _ => 20.0,
+        };
         return new Size(Math.Min(width, availableSize.Width), Math.Min(height, availableSize.Height));
     }
 
@@ -434,6 +464,9 @@ public sealed class VisualizerControl : FrameworkElement
                 break;
             case VisualizerStyle.Waveform:
                 DrawWaveform(dc, brush, width, height, values);
+                break;
+            case VisualizerStyle.BassWave:
+                DrawBassWave(dc, brush, width, height);
                 break;
             default:
                 DrawMinimalBars(dc, brush, width, height, values);
@@ -555,6 +588,51 @@ public sealed class VisualizerControl : FrameworkElement
         dc.Pop();
         dc.Pop();
         dc.DrawGeometry(null, GetStrokePen(brush), geometry);
+    }
+
+    /// <summary>
+    /// Three layered "liquid" waves rising from the bottom edge, like a water surface: the front one follows the bass and
+    /// jumps on kicks, the middle one the low mids, the back one the highs. Each travels at its own speed and the whole
+    /// flow speeds up on kicks. Filled with the brush over the full control (album-art gradient stays put).
+    /// </summary>
+    private void DrawBassWave(DrawingContext dc, Brush brush, double width, double height)
+    {
+        var punch = _punch.Value;
+        var layers = new (double Cycles, double Speed, double Amp, double Opacity, double Offset)[]
+        {
+            (3.1, 1.9, 0.30 + 0.55 * _highLevel, 0.30, 0.9),
+            (2.0, -1.3, 0.25 + 0.75 * _midLevel, 0.45, 2.1),
+            (1.25, 1.0, 0.20 + 0.45 * _bassLevel + 0.55 * punch, 0.75, 0.0),
+        };
+
+        const int points = 56;
+        var rect = new Rect(0, 0, width, height);
+        foreach (var (cycles, speed, amp, opacity, offset) in layers)
+        {
+            var a = Math.Clamp(amp, 0, 1);
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(new Point(0, height), true, true);
+                for (var i = 0; i <= points; i++)
+                {
+                    var u = (double)i / points;
+                    var envelope = 0.35 + 0.65 * Math.Sin(Math.PI * u);
+                    var wave = 0.5 + 0.5 * Math.Sin(2 * Math.PI * cycles * u + _flowPhase * speed + offset);
+                    // Rest level: a thin band at the bottom; louder → the surface rises and swells.
+                    var rise = height * (0.08 + 0.92 * a * envelope * (0.35 + 0.65 * wave));
+                    ctx.LineTo(new Point(u * width, height - rise), true, true);
+                }
+                ctx.LineTo(new Point(width, height), true, false);
+            }
+            geometry.Freeze();
+
+            dc.PushClip(geometry);
+            dc.PushOpacity(opacity);
+            dc.DrawRectangle(brush, null, rect);
+            dc.Pop();
+            dc.Pop();
+        }
     }
 
     private static void AppendCatmullRom(StreamGeometryContext ctx, Point p0, Point p1, Point p2, Point p3, double centerY, bool isUpper)
