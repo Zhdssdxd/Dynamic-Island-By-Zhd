@@ -17,7 +17,7 @@ public sealed class VisualizerControl : FrameworkElement
     private const int MaxBars = 128;
     private const int DefaultEqualizerBars = 16;
     private const int DefaultMinimalBars = 5;
-    private const int DefaultWaveformPoints = 32;
+    private const int DefaultWaveformPoints = 24;
     private const int MaxSourceBands = 256;
 
     private const double RiseRate = 26.0;          // 1/s — display follows rising values quickly
@@ -31,7 +31,8 @@ public sealed class VisualizerControl : FrameworkElement
     private const double MinimalRestFraction = 0.15;
     private const double WaveStrokeThickness = 1.5;
     private const double WaveFillOpacity = 0.7;
-    private const double WaveTaperExponent = 0.6;
+    /// <summary>Share of the width kept quiet at each end of the wave (the curve rises from the centre line there).</summary>
+    private const double WaveEdge = 0.07;
 
     private static readonly Brush EqualizerOpacityMask = CreateEqualizerMask();
 
@@ -52,7 +53,7 @@ public sealed class VisualizerControl : FrameworkElement
         nameof(BarBrush), typeof(Brush), typeof(VisualizerControl),
         new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender, OnBarBrushChanged));
 
-    /// <summary>Number of bars (or wave points). 0 = automatic: Equalizer 16, MinimalBars 5, Waveform 32. Max 128.</summary>
+    /// <summary>Number of bars (or wave points). 0 = automatic: Equalizer 16, MinimalBars 5, Waveform 24. Max 128.</summary>
     public static readonly DependencyProperty BarCountProperty = DependencyProperty.Register(
         nameof(BarCount), typeof(int), typeof(VisualizerControl),
         new FrameworkPropertyMetadata(0,
@@ -74,6 +75,11 @@ public sealed class VisualizerControl : FrameworkElement
     private TimeSpan _lastRenderingTime;
     private VisualizerStyle? _fadeFromMode;
     private double _crossfade = 1.0;
+    private readonly BassPunch _punch = new();
+    private double _flowPhase;
+    private float _bassLevel;
+    private float _midLevel;
+    private float _highLevel;
     private Pen? _strokePen;
     private Brush? _strokePenBrush;
 
@@ -258,6 +264,8 @@ public sealed class VisualizerControl : FrameworkElement
     {
         Array.Clear(_target);
         Array.Clear(_display);
+        _punch.Reset();
+        _bassLevel = _midLevel = _highLevel = 0f;
         _fadeFromMode = null;
         _crossfade = 1.0;
         InvalidateVisual();
@@ -265,6 +273,7 @@ public sealed class VisualizerControl : FrameworkElement
 
     private bool IsAtRest()
     {
+        if (_punch.Value > SettleEpsilon || _bassLevel > SettleEpsilon || _midLevel > SettleEpsilon) return false;
         foreach (var v in _display)
             if (v > SettleEpsilon) return false;
         return true;
@@ -338,6 +347,36 @@ public sealed class VisualizerControl : FrameworkElement
             moving = true;
         }
 
+        // Kick detector for the first (bass) bar / wave point.
+        var previousPunch = _punch.Value;
+        var bass = hasData ? SpectrumShaper.PeakBetween(_display, SpectrumShaper.MinHz, SpectrumShaper.BassHighHz) : 0f;
+        var punch = _punch.Update(bass, dt);
+        if (Math.Abs(punch - previousPunch) > SettleEpsilon || punch > SettleEpsilon)
+        {
+            changed |= punch != previousPunch;
+            moving |= punch > SettleEpsilon;
+        }
+
+        // BassWave: smoothed band groups + a phase that flows faster on kicks (animates every frame while playing).
+        if (Mode == VisualizerStyle.BassWave)
+        {
+            var span = (ReadOnlySpan<float>)_display;
+            var lowMid = SpectrumShaper.PeakBetween(span, 150, 600);
+            var high = SpectrumShaper.PeakBetween(span, 2000, 8000);
+            var k = (float)(1.0 - Math.Exp(-12.0 * dt));
+            _bassLevel += (bass - _bassLevel) * k;
+            _midLevel += (lowMid - _midLevel) * k;
+            _highLevel += (high - _highLevel) * k;
+            var energy = Math.Max(_bassLevel, Math.Max(_midLevel, punch));
+            if (polling || energy > SettleEpsilon)
+            {
+                _flowPhase += dt * (1.4 + 7.0 * punch);
+                if (_flowPhase > 1000) _flowPhase -= 1000;
+                changed = true;
+                moving |= energy > SettleEpsilon;
+            }
+        }
+
         if (_crossfade < 1.0)
         {
             _crossfade = Math.Min(1.0, _crossfade + dt / CrossfadeSeconds);
@@ -364,7 +403,12 @@ public sealed class VisualizerControl : FrameworkElement
             VisualizerStyle.Equalizer => count * 5.0,
             _ => 64.0,
         };
-        var height = mode == VisualizerStyle.MinimalBars ? 16.0 : 20.0;
+        var height = mode switch
+        {
+            VisualizerStyle.MinimalBars => 16.0,
+            VisualizerStyle.BassWave => 48.0,
+            _ => 20.0,
+        };
         return new Size(Math.Min(width, availableSize.Width), Math.Min(height, availableSize.Height));
     }
 
@@ -409,7 +453,7 @@ public sealed class VisualizerControl : FrameworkElement
         var count = ResolveCount(mode);
         Span<float> buffer = stackalloc float[MaxBars];
         var values = buffer.Slice(0, count);
-        SampleDisplay(values, blendPeaks: mode != VisualizerStyle.Waveform);
+        SampleDisplay(values);
 
         var pushed = opacity < 0.999;
         if (pushed) dc.PushOpacity(opacity);
@@ -421,6 +465,9 @@ public sealed class VisualizerControl : FrameworkElement
             case VisualizerStyle.Waveform:
                 DrawWaveform(dc, brush, width, height, values);
                 break;
+            case VisualizerStyle.BassWave:
+                DrawBassWave(dc, brush, width, height);
+                break;
             default:
                 DrawMinimalBars(dc, brush, width, height, values);
                 break;
@@ -429,32 +476,14 @@ public sealed class VisualizerControl : FrameworkElement
     }
 
     /// <summary>
-    /// Maps the per-band display values (low → high) onto <paramref name="destination"/>. When grouping several bands
-    /// into one bar, blends group peak and mean so bars stay lively without flickering.
+    /// iPhone-style mapping: every bar / wave point listens to a fixed frequency on a logarithmic axis
+    /// (<see cref="SpectrumShaper.FixedFrequencies"/>); the first one is the bass and jumps hard on kicks.
     /// </summary>
-    private void SampleDisplay(Span<float> destination, bool blendPeaks)
+    private void SampleDisplay(Span<float> destination)
     {
-        var source = _display;
-        if (!blendPeaks || destination.Length >= source.Length)
-        {
-            FftProcessor.Resample(source, destination);
-            return;
-        }
-
-        var ratio = (double)source.Length / destination.Length;
-        for (var j = 0; j < destination.Length; j++)
-        {
-            var from = (int)(j * ratio);
-            var to = Math.Min(source.Length, Math.Max(from + 1, (int)((j + 1) * ratio)));
-            float sum = 0f, peak = 0f;
-            for (var i = from; i < to; i++)
-            {
-                var v = source[i];
-                sum += v;
-                if (v > peak) peak = v;
-            }
-            destination[j] = Math.Clamp(0.55f * peak + 0.45f * (sum / (to - from)), 0f, 1f);
-        }
+        SpectrumShaper.FixedFrequencies(_display, destination);
+        if (destination.Length > 0)
+            destination[0] = Math.Clamp(0.4f * destination[0] + _punch.Value, 0f, 1f);
     }
 
     /// <summary>A few pill-shaped bars centred vertically; at rest they are small pills (≈15 % height).</summary>
@@ -503,8 +532,9 @@ public sealed class VisualizerControl : FrameworkElement
     }
 
     /// <summary>
-    /// Smooth symmetric wave: Catmull-Rom curve through the points (tapered to the centre line at both ends),
-    /// mirrored around the centre, filled at 70 % opacity and outlined with a 1.5 DIP stroke. At rest: a flat line.
+    /// Smooth symmetric wave: Catmull-Rom curve through the fixed-frequency points (bass first, on the left), rising
+    /// from the centre line at both ends, mirrored around the centre. The fill paints the brush over the whole control
+    /// clipped to the wave (so an album-art brush keeps a stable gradient), plus a 1.5 DIP outline. At rest: a flat line.
     /// </summary>
     private void DrawWaveform(DrawingContext dc, Brush brush, double width, double height, ReadOnlySpan<float> values)
     {
@@ -516,14 +546,16 @@ public sealed class VisualizerControl : FrameworkElement
         var centerY = height / 2;
         var maxAmplitude = Math.Max(0.0, centerY - WaveStrokeThickness);
 
-        Span<Point> upper = stackalloc Point[MaxBars];
-        upper = upper.Slice(0, n);
+        // Quiet anchor points at both ends; the data points sit between them.
+        var total = n + 2;
+        Span<Point> upper = stackalloc Point[MaxBars + 2];
+        upper = upper.Slice(0, total);
+        upper[0] = new Point(pad, centerY);
+        upper[total - 1] = new Point(pad + usableWidth, centerY);
         for (var i = 0; i < n; i++)
         {
-            var u = (double)i / (n - 1);
-            var taper = Math.Pow(Math.Max(0.0, Math.Sin(Math.PI * u)), WaveTaperExponent);
-            var amplitude = values[i] * maxAmplitude * taper;
-            upper[i] = new Point(pad + u * usableWidth, centerY - amplitude);
+            var u = WaveEdge + (1 - 2 * WaveEdge) * i / (n - 1);
+            upper[i + 1] = new Point(pad + u * usableWidth, centerY - values[i] * maxAmplitude);
         }
 
         var geometry = new StreamGeometry();
@@ -532,28 +564,75 @@ public sealed class VisualizerControl : FrameworkElement
             ctx.BeginFigure(upper[0], true, true);
 
             // Upper edge, left → right.
-            for (var i = 0; i < n - 1; i++)
+            for (var i = 0; i < total - 1; i++)
             {
                 AppendCatmullRom(ctx,
-                    upper[Math.Max(i - 1, 0)], upper[i], upper[i + 1], upper[Math.Min(i + 2, n - 1)],
+                    upper[Math.Max(i - 1, 0)], upper[i], upper[i + 1], upper[Math.Min(i + 2, total - 1)],
                     centerY, isUpper: true);
             }
 
             // Lower edge (mirror image), right → left.
-            for (var i = n - 1; i > 0; i--)
+            for (var i = total - 1; i > 0; i--)
             {
                 AppendCatmullRom(ctx,
-                    Mirror(upper[Math.Min(i + 1, n - 1)], centerY), Mirror(upper[i], centerY),
+                    Mirror(upper[Math.Min(i + 1, total - 1)], centerY), Mirror(upper[i], centerY),
                     Mirror(upper[i - 1], centerY), Mirror(upper[Math.Max(i - 2, 0)], centerY),
                     centerY, isUpper: false);
             }
         }
         geometry.Freeze();
 
+        dc.PushClip(geometry);
         dc.PushOpacity(WaveFillOpacity);
-        dc.DrawGeometry(brush, null, geometry);
+        dc.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+        dc.Pop();
         dc.Pop();
         dc.DrawGeometry(null, GetStrokePen(brush), geometry);
+    }
+
+    /// <summary>
+    /// Three layered "liquid" waves rising from the bottom edge, like a water surface: the front one follows the bass and
+    /// jumps on kicks, the middle one the low mids, the back one the highs. Each travels at its own speed and the whole
+    /// flow speeds up on kicks. Filled with the brush over the full control (album-art gradient stays put).
+    /// </summary>
+    private void DrawBassWave(DrawingContext dc, Brush brush, double width, double height)
+    {
+        var punch = _punch.Value;
+        var layers = new (double Cycles, double Speed, double Amp, double Opacity, double Offset)[]
+        {
+            (3.1, 1.9, 0.30 + 0.55 * _highLevel, 0.30, 0.9),
+            (2.0, -1.3, 0.25 + 0.75 * _midLevel, 0.45, 2.1),
+            (1.25, 1.0, 0.20 + 0.45 * _bassLevel + 0.55 * punch, 0.75, 0.0),
+        };
+
+        const int points = 56;
+        var rect = new Rect(0, 0, width, height);
+        foreach (var (cycles, speed, amp, opacity, offset) in layers)
+        {
+            var a = Math.Clamp(amp, 0, 1);
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(new Point(0, height), true, true);
+                for (var i = 0; i <= points; i++)
+                {
+                    var u = (double)i / points;
+                    var envelope = 0.35 + 0.65 * Math.Sin(Math.PI * u);
+                    var wave = 0.5 + 0.5 * Math.Sin(2 * Math.PI * cycles * u + _flowPhase * speed + offset);
+                    // Rest level: a thin band at the bottom; louder → the surface rises and swells.
+                    var rise = height * (0.08 + 0.92 * a * envelope * (0.35 + 0.65 * wave));
+                    ctx.LineTo(new Point(u * width, height - rise), true, true);
+                }
+                ctx.LineTo(new Point(width, height), true, false);
+            }
+            geometry.Freeze();
+
+            dc.PushClip(geometry);
+            dc.PushOpacity(opacity);
+            dc.DrawRectangle(brush, null, rect);
+            dc.Pop();
+            dc.Pop();
+        }
     }
 
     private static void AppendCatmullRom(StreamGeometryContext ctx, Point p0, Point p1, Point p2, Point p3, double centerY, bool isUpper)

@@ -20,6 +20,7 @@ public enum IslandViewKind
     ExpandedTimer,
     ExpandedDownload,
     Dashboard,
+    Clipboard,
     Notification,
     Indicator,
 }
@@ -64,6 +65,7 @@ public static class IslandLayout
     public static readonly Size ExpandedTimerStopwatchSize = new(340, 80);
     public static readonly Size ExpandedDownloadSize = new(380, 104);
     public static readonly Size DashboardSize = new(380, 128);
+    public static readonly Size ClipboardSize = new(420, 248);
 
     // ── Transients.
     public const double IndicatorWidth = 300;
@@ -97,6 +99,7 @@ public static class IslandLayout
             IslandActivity.Download when s.Download is not null => IslandViewKind.CompactDownload,
             _ => IslandViewKind.Idle,
         },
+        IslandPresentation.Expanded when s.IsClipboardOpen => IslandViewKind.Clipboard,
         IslandPresentation.Expanded => s.Activity switch
         {
             IslandActivity.Music when s.Media is not null => IslandViewKind.ExpandedMusic,
@@ -121,13 +124,16 @@ public static class IslandLayout
     public static bool IsCompactLike(IslandViewKind kind) => kind is IslandViewKind.Idle or IslandViewKind.CompactMusic
         or IslandViewKind.CompactVideo or IslandViewKind.CompactTimer or IslandViewKind.CompactDownload;
 
-    /// <summary>Target geometry for a view. <paramref name="notificationHeight"/> measures a notification banner.</summary>
+    /// <summary>
+    /// Target geometry for a view. <paramref name="notificationHeight"/> measures a notification banner;
+    /// <paramref name="compactHeight"/> &gt; 0 overrides the compact height (top-bar mode: exactly the bar's height).
+    /// </summary>
     public static IslandGeometry Measure(IslandViewKind kind, IslandState s, Func<IslandNotification, double>? notificationHeight = null,
-        bool hasLyrics = false)
+        bool hasLyrics = false, double compactHeight = 0)
     {
         var a = s.Settings.Appearance;
         var cw = a.CompactWidth;
-        var ch = a.CompactHeight;
+        var ch = compactHeight > 0 ? compactHeight : a.CompactHeight;
         var badge = s.SecondaryActivity != IslandActivity.None && s.SecondaryActivity != s.Activity ? SecondaryBadgeExtra : 0;
 
         Size size;
@@ -170,6 +176,9 @@ public static class IslandLayout
                 break;
             case IslandViewKind.Dashboard:
                 size = DashboardSize;
+                break;
+            case IslandViewKind.Clipboard:
+                size = ClipboardSize;
                 break;
             case IslandViewKind.Notification:
                 var h = s.Notification is { } n && notificationHeight is not null ? notificationHeight(n) : 80;

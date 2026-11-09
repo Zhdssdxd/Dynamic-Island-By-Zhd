@@ -31,6 +31,11 @@
                         ToolTip="Секундомер" />
                 <Button Margin="10,0,0,0"
                         Style="{StaticResource FilledIconButtonStyle}"
+                        Content="{x:Static m:Glyphs.Copy}"
+                        Command="{Binding ToggleClipboardCommand}"
+                        ToolTip="Буфер обмена" />
+                <Button Margin="10,0,0,0"
+                        Style="{StaticResource FilledIconButtonStyle}"
                         Content="{x:Static m:Glyphs.Settings}"
                         Command="{Binding OpenSettingsCommand}"
                         ToolTip="Настройки" />

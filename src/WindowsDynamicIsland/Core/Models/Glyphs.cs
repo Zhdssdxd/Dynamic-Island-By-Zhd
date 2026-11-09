@@ -38,6 +38,14 @@ public static class Glyphs
     public const string Message = "";
     public const string Settings = "";
     public const string Close = "";
+    public const string Copy = "";
+    public const string Paste = "";
+    public const string Pin = "";
+    public const string Unpin = "";
+    public const string Delete = "";
+    public const string Search = "";
+    public const string Picture = "";
+    public const string Folder = "";
     public const string Check = "";
     public const string Add = "";
     public const string Warning = "";

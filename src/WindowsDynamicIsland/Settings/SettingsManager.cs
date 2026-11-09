@@ -144,12 +144,15 @@ public sealed class SettingsManager : IDisposable
         a.AnimationSpeed = Clamp(a.AnimationSpeed, 0.5, 2.0, 1.0);
         a.TopOffset = Clamp(a.TopOffset, 0, 200, 6);
         a.HorizontalOffset = Clamp(a.HorizontalOffset, -2000, 2000, 0);
+        a.TopBarHeight = Clamp(a.TopBarHeight, 0, 80, 0);
+        if (!Enum.IsDefined(a.TopBarFill)) a.TopBarFill = TopBarFill.Black;
 
         var f = s.Features;
         f.NotificationDurationSeconds = Clamp(f.NotificationDurationSeconds, 2, 30, 5);
         f.VisualizerSensitivity = Clamp(f.VisualizerSensitivity, 0.5, 2.0, 1.0);
         f.DownloadsFolder ??= "";
         f.VisualizerDeviceId ??= "";
+        f.ClipboardMaxItems = (int)Clamp(f.ClipboardMaxItems, 10, 200, 50);
 
         var i = s.Indicators;
         i.DurationSeconds = Clamp(i.DurationSeconds, 0.8, 10, 1.8);
@@ -168,6 +171,7 @@ public sealed class SettingsManager : IDisposable
         h.MediaPlayPause ??= "";
         h.StartStopwatch ??= "";
         h.OpenSettings ??= "";
+        h.ClipboardHistory ??= "";
     }
 
     private static double Clamp(double v, double min, double max, double fallback)

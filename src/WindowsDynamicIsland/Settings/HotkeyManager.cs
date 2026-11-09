@@ -27,6 +27,7 @@ public sealed class HotkeyManager : IIslandModule
         MediaPlayPause = 3,
         StartStopwatch = 4,
         OpenSettings = 5,
+        ClipboardHistory = 6,
     }
 
     private readonly IEventBus _bus;
@@ -132,7 +133,7 @@ public sealed class HotkeyManager : IIslandModule
         if (_source is null || _stopped) return;
 
         var signature = string.Join("|", hotkeys.Enabled, hotkeys.ToggleExpand, hotkeys.ToggleVisibility,
-            hotkeys.MediaPlayPause, hotkeys.StartStopwatch, hotkeys.OpenSettings);
+            hotkeys.MediaPlayPause, hotkeys.StartStopwatch, hotkeys.OpenSettings, hotkeys.ClipboardHistory);
         if (!force && signature == _appliedSignature) return;
         _appliedSignature = signature;
 
@@ -152,6 +153,7 @@ public sealed class HotkeyManager : IIslandModule
             (HotkeyAction.MediaPlayPause, hotkeys.MediaPlayPause),
             (HotkeyAction.StartStopwatch, hotkeys.StartStopwatch),
             (HotkeyAction.OpenSettings, hotkeys.OpenSettings),
+            (HotkeyAction.ClipboardHistory, hotkeys.ClipboardHistory),
         };
 
         var problems = new List<string>();
@@ -290,6 +292,9 @@ public sealed class HotkeyManager : IIslandModule
                 break;
             case HotkeyAction.OpenSettings:
                 _bus.Publish(new OpenSettingsRequested());
+                break;
+            case HotkeyAction.ClipboardHistory:
+                _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleClipboard));
                 break;
         }
     }

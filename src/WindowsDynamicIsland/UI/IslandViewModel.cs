@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using WindowsDynamicIsland.ClipboardHistory;
 using WindowsDynamicIsland.Core;
 using WindowsDynamicIsland.Core.Models;
 using WindowsDynamicIsland.Settings;
@@ -83,6 +84,31 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         });
 
         OpenSettingsCommand = new RelayCommand(() => _bus.Publish(new OpenSettingsRequested()));
+        OpenClipboardHistoryCommand = new RelayCommand(() =>
+        {
+            _bus.Publish(new IslandActionRequested(IslandUserAction.Collapse));
+            _bus.Publish(new OpenClipboardHistoryRequested());
+        });
+        ToggleClipboardCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleClipboard)));
+        PasteClipboardCommand = new RelayCommand(p => PasteClipboard(p as ClipboardEntry));
+        CopyClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e && ClipboardManager?.CopyToClipboard(e) == true) FlashClipboardStatus("Скопировано");
+        });
+        PinClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e) ClipboardManager?.TogglePin(e);
+        });
+        DeleteClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e) ClipboardManager?.Remove(e);
+        });
+        _clipboardStatusTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(1.5) };
+        _clipboardStatusTimer.Tick += (_, _) =>
+        {
+            _clipboardStatusTimer.Stop();
+            ClipboardStatus = "";
+        };
         ExitCommand = new RelayCommand(() => _bus.Publish(new ExitRequested()));
         HideIslandCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleVisibility)));
         DismissCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.DismissTransient)));
@@ -110,6 +136,58 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     /// <summary>Parameter: double minutes.</summary>
     public ICommand StartTimerCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+    public ICommand OpenClipboardHistoryCommand { get; }
+    public ICommand ToggleClipboardCommand { get; }
+    /// <summary>Parameter: <see cref="ClipboardEntry"/>. Copies it and pastes into the focused app (the island never takes focus).</summary>
+    public ICommand PasteClipboardCommand { get; }
+    public ICommand CopyClipboardCommand { get; }
+    public ICommand PinClipboardCommand { get; }
+    public ICommand DeleteClipboardCommand { get; }
+
+    // ───────────────────────────── Clipboard (in the island) ─────────────────────────────
+
+    private readonly DispatcherTimer _clipboardStatusTimer;
+    private string _clipboardStatus = "";
+    private System.Collections.ObjectModel.ObservableCollection<ClipboardEntry>? _clipboardEntries;
+
+    private static ClipboardHistoryManager? ClipboardManager => ServiceRegistry.Get<ClipboardHistoryManager>();
+
+    /// <summary>Live history (newest first); null until the clipboard module has started.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<ClipboardEntry>? ClipboardEntries
+    {
+        get => _clipboardEntries;
+        private set => SetProperty(ref _clipboardEntries, value);
+    }
+
+    /// <summary>Short feedback in the clipboard header ("Скопировано").</summary>
+    public string ClipboardStatus { get => _clipboardStatus; private set => SetProperty(ref _clipboardStatus, value); }
+
+    private void FlashClipboardStatus(string text)
+    {
+        ClipboardStatus = text;
+        _clipboardStatusTimer.Stop();
+        _clipboardStatusTimer.Start();
+    }
+
+    private void PasteClipboard(ClipboardEntry? entry)
+    {
+        var manager = ClipboardManager;
+        if (entry is null || manager is null) return;
+        if (!manager.CopyToClipboard(entry))
+        {
+            FlashClipboardStatus("Буфер занят, попробуй ещё раз");
+            return;
+        }
+        _bus.Publish(new IslandActionRequested(IslandUserAction.Collapse));
+        // Give the clipboard owner change a moment to settle, then paste into the focused app.
+        var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(90) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            KeyboardPaste.SendCtrlV();
+        };
+        timer.Start();
+    }
     public ICommand ExitCommand { get; }
     public ICommand HideIslandCommand { get; }
     public ICommand DismissCommand { get; }
@@ -136,6 +214,9 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     private string _elapsedText = "";
     private string _remainingText = "";
     private Brush _accentBrush;
+    private Brush _waveBrush = Brushes.White;
+    private bool _showCompactWave;
+    private bool _showExpandedWave;
     private double _visualizerOpacity = 1;
     private bool _showPlayingBars;
     private string _playbackStateGlyph = Glyphs.Play;
@@ -161,6 +242,12 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     public string RemainingText { get => _remainingText; private set => SetProperty(ref _remainingText, value); }
     /// <summary>White, or the album-art tint when ColorScheme == Adaptive.</summary>
     public Brush AccentBrush { get => _accentBrush; private set => SetProperty(ref _accentBrush, value); }
+    /// <summary>Brush for the sound waves: a heavily blurred, colour-lifted album cover, or <see cref="AccentBrush"/>.</summary>
+    public Brush WaveBrush { get => _waveBrush; private set => SetProperty(ref _waveBrush, value); }
+    /// <summary>Compact music wave visible: playing, visualizer on, wave enabled in settings.</summary>
+    public bool ShowCompactWave { get => _showCompactWave; private set => SetProperty(ref _showCompactWave, value); }
+    /// <summary>Expanded music background wave visible: playing, visualizer on, wave enabled in settings.</summary>
+    public bool ShowExpandedWave { get => _showExpandedWave; private set => SetProperty(ref _showExpandedWave, value); }
     /// <summary>1 while playing, dimmed while paused (bars decay to rest).</summary>
     public double VisualizerOpacity { get => _visualizerOpacity; private set => SetProperty(ref _visualizerOpacity, value); }
     /// <summary>Visualizer enabled AND media playing (compact video shows bars only then).</summary>
@@ -350,6 +437,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     private void RefreshViewKind()
     {
         ViewKind = IslandLayout.ResolveView(State);
+        if (ViewKind == IslandViewKind.Clipboard && ClipboardEntries is null) ClipboardEntries = ClipboardManager?.Entries;
         if (ViewKind == IslandViewKind.Dashboard) RefreshClock();
         UpdateTicker();
     }
@@ -444,6 +532,15 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
             }
             AccentBrush = accent;
         }
+
+        var appearance = settings.Appearance;
+        WaveBrush = appearance.WaveArtworkColors && ArtworkColorExtractor.GetBlurredBrush(m?.Thumbnail) is { } blurred
+            ? blurred
+            : AccentBrush;
+        ShowCompactWave = ShowPlayingBars && appearance.CompactWave;
+        // The beat crest already carries the bass along the bottom edge; the inner glow would only show through in the
+        // corners as stray stripes, so it is the fallback for when the crest is switched off.
+        ShowExpandedWave = ShowPlayingBars && appearance.ExpandedWave && !appearance.PulseToBeat;
 
         // Session switcher.
         var sessions = State.MediaSessions;
@@ -752,6 +849,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _ticker.Stop();
+        _clipboardStatusTimer.Stop();
         _lyricsSub.Dispose();
         State.PropertyChanged -= OnStatePropertyChanged;
     }

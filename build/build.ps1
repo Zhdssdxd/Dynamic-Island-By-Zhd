@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS  Restore, build (Release) and run the unit tests.
 .EXAMPLE   .\build\build.ps1
 .EXAMPLE   .\build\build.ps1 -Configuration Debug -SkipTests

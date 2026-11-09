@@ -234,6 +234,29 @@
                         </StackPanel>
                     </HeaderedContentControl>
 
+                    <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Верхняя панель" />
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Встроить в верхнюю панель"
+                                            Tag="Свёрнутый остров встаёт в самый верх экрана и по высоте ровно как панель сверху (панель задач сверху, YASB, верхний бар как в macOS)">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding TopBarMode}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Заливка в панели"
+                                            Tag="«Только контур» — свёрнутый остров прозрачный и сливается с панелью, видна только окантовка"
+                                            IsEnabled="{Binding TopBarMode}">
+                        <ComboBox Style="{StaticResource SettingsComboBox}"
+                                  ItemsSource="{Binding TopBarFillOptions}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding TopBarFill}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Высота панели"
+                                            Tag="0 — определить автоматически (если панель не резервирует место, берётся 32 px)"
+                                            IsEnabled="{Binding TopBarMode}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource SettingsValueText}" Text="{Binding TopBarHeightText}" />
+                            <Slider Style="{StaticResource SettingsSlider}" Minimum="0" Maximum="60" SmallChange="1" LargeChange="2"
+                                    TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding TopBarHeight}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+
                     <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Поведение" />
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Показывать в простое" Tag="Маленькая капсула видна, даже когда ничего не происходит">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWhenIdle}" />
@@ -244,6 +267,22 @@
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна под бит"
                                             Tag="Низ раскрытого острова становится волной в такт музыке и видео (нужен включённый визуализатор)">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding PulseToBeat}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна в свёрнутом острове"
+                                            Tag="Живая волна между обложкой и полосками, пока играет музыка">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CompactWave}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна в раскрытом острове"
+                                            Tag="Мягкая волна внутри раскрытого плеера — когда «Волна под бит» выключена">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ExpandedWave}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна цвета обложки"
+                                            Tag="Волна закрашивается сильно размытой обложкой трека вместо белого">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WaveArtworkColors}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна под бит цвета фона"
+                                            Tag="Чёрная волна снизу острова перетекает в цвет того, что позади (обои, окно)">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WaveAmbientColor}" />
                     </HeaderedContentControl>
                 </StackPanel>
             </ScrollViewer>
@@ -318,6 +357,28 @@
                                     Click="ResetDownloadsFolder_Click"
                                     Visibility="{Binding HasCustomDownloadsFolder, Converter={StaticResource BoolToVisibility}}" />
                             <Button Style="{StaticResource SecondaryButton}" Content="Обзор…" Click="BrowseDownloads_Click" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+
+                    <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Буфер обмена" />
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="История буфера обмена"
+                                            Tag="Запоминает скопированный текст, картинки и файлы. Ctrl+Alt+V открывает его прямо в острове (щелчок по записи — вставить); «Открыть» — большое окно с поиском">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource SecondaryButton}" Content="Открыть" Margin="0,0,12,0"
+                                    Command="{Binding OpenClipboardHistoryCommand}" />
+                            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClipboardHistoryEnabled}" />
+                        </StackPanel>
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="«Скопировано» в острове"
+                                            Tag="Короткий индикатор в острове при каждом копировании" IsEnabled="{Binding ClipboardHistoryEnabled}">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClipboardIndicator}" />
+                    </HeaderedContentControl>
+                    <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Сколько хранить"
+                                            Tag="Закреплённые записи не удаляются и сохраняются между запусками" IsEnabled="{Binding ClipboardHistoryEnabled}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource SettingsValueText}" Text="{Binding ClipboardMaxItems, StringFormat='{}{0:0}'}" />
+                            <Slider Style="{StaticResource SettingsSlider}" Minimum="10" Maximum="200" SmallChange="5" LargeChange="10"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" Value="{Binding ClipboardMaxItems}" />
                         </StackPanel>
                     </HeaderedContentControl>
                 </StackPanel>

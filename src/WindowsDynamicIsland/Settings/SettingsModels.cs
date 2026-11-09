@@ -36,6 +36,15 @@ public enum IslandHorizontalPosition
     Right,
 }
 
+/// <summary>How the compact island looks while it sits inside a top bar.</summary>
+public enum TopBarFill
+{
+    /// <summary>Black capsule, as usual.</summary>
+    Black,
+    /// <summary>Transparent capsule — only its outline is drawn, so it blends with the bar.</summary>
+    Outline,
+}
+
 public sealed class AppearanceSettings
 {
     /// <summary>Compact (idle) capsule width in DIPs.</summary>
@@ -62,6 +71,23 @@ public sealed class AppearanceSettings
     public bool ExpandOnHover { get; set; }
     /// <summary>When expanded with music/video playing, the bottom edge of the capsule bounces to the beat.</summary>
     public bool PulseToBeat { get; set; } = true;
+    /// <summary>Live sound wave between the artwork and the bars in the compact music view.</summary>
+    public bool CompactWave { get; set; } = true;
+    /// <summary>Soft sound wave along the bottom of the expanded music view.</summary>
+    public bool ExpandedWave { get; set; } = true;
+    /// <summary>Paint the sound waves with a heavily blurred copy of the album art instead of a flat colour.</summary>
+    public bool WaveArtworkColors { get; set; } = true;
+    /// <summary>The black beat wave under the expanded island takes the colour of what is behind the island.</summary>
+    public bool WaveAmbientColor { get; set; } = true;
+    /// <summary>
+    /// Top-bar mode: the island sits at the very top of the monitor and the compact capsule is exactly as tall as the
+    /// bar docked there (taskbar on top, YASB, a macOS-style menu bar…). Expanded states still open below it.
+    /// </summary>
+    public bool TopBarMode { get; set; }
+    /// <summary>Compact capsule look in top-bar mode.</summary>
+    public TopBarFill TopBarFill { get; set; } = TopBarFill.Black;
+    /// <summary>Bar height in DIPs for top-bar mode; 0 = detect from the work area (32 when nothing is docked on top).</summary>
+    public double TopBarHeight { get; set; }
 }
 
 public sealed class FeatureSettings
@@ -84,6 +110,12 @@ public sealed class FeatureSettings
     /// </summary>
     public string VisualizerDeviceId { get; set; } = "";
     public bool DownloadsEnabled { get; set; } = true;
+    /// <summary>Remember copied text / images / files and show them in the clipboard history window.</summary>
+    public bool ClipboardHistoryEnabled { get; set; } = true;
+    /// <summary>How many unpinned items the history keeps (10..200).</summary>
+    public int ClipboardMaxItems { get; set; } = 50;
+    /// <summary>Show a short "Скопировано" indicator in the island on every copy.</summary>
+    public bool ClipboardIndicator { get; set; } = true;
     /// <summary>Folder watched for downloads; empty = the user's Downloads known folder.</summary>
     public string DownloadsFolder { get; set; } = "";
 }
@@ -135,4 +167,5 @@ public sealed class HotkeySettings
     public string MediaPlayPause { get; set; } = "Ctrl+Alt+P";
     public string StartStopwatch { get; set; } = "Ctrl+Alt+T";
     public string OpenSettings { get; set; } = "Ctrl+Alt+S";
+    public string ClipboardHistory { get; set; } = "Ctrl+Alt+V";
 }

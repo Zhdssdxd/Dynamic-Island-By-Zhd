@@ -51,6 +51,7 @@ public sealed class IslandState : ObservableObject
     private bool _isVisualizerActive;
     private bool _isFullscreenSuppressed;
     private bool _isUserHidden;
+    private bool _isClipboardOpen;
 
     public IslandPresentation Presentation { get => _presentation; internal set => SetProperty(ref _presentation, value); }
 
@@ -95,4 +96,7 @@ public sealed class IslandState : ObservableObject
     public bool IsFullscreenSuppressed { get => _isFullscreenSuppressed; internal set => SetProperty(ref _isFullscreenSuppressed, value); }
 
     public bool IsUserHidden { get => _isUserHidden; internal set => SetProperty(ref _isUserHidden, value); }
+
+    /// <summary>The expanded island shows the clipboard history instead of the current activity.</summary>
+    public bool IsClipboardOpen { get => _isClipboardOpen; internal set => SetProperty(ref _isClipboardOpen, value); }
 }

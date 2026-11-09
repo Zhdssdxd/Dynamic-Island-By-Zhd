@@ -1,12 +1,15 @@
-; Inno Setup 6 script for Windows Dynamic Island.
+﻿; Inno Setup 6 script for Windows Dynamic Island.
 ; 1) Run build\publish.ps1   2) Open this file in Inno Setup and press Compile.
 ; Per-user install, no administrator rights required.
 
 #define AppName      "Dynamic Island"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.3.5"
 #define AppPublisher "Zhd"
 #define AppExe       "DynamicIsland.exe"
 #define RunValue     "WindowsDynamicIsland"
+#ifndef PublishDir
+  #define PublishDir "..\artifacts\publish"
+#endif
 
 [Setup]
 AppId={{4BAD30B7-E045-460D-9349-3A091D0AD3CB}
@@ -45,7 +48,7 @@ Name: "autostart"; Description: "{cm:AutostartTask}"; Flags: checkedonce
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

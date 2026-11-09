@@ -132,6 +132,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             new(nameof(HotkeySettings.MediaPlayPause), "Воспроизведение / пауза"),
             new(nameof(HotkeySettings.StartStopwatch), "Секундомер / пауза таймера"),
             new(nameof(HotkeySettings.OpenSettings), "Открыть настройки"),
+            new(nameof(HotkeySettings.ClipboardHistory), "Буфер обмена в острове"),
         };
 
         StartTimerCommand = new RelayCommand(() => _bus.Publish(new TimerCommand(TimerCommandKind.StartCountdown)));
@@ -166,6 +167,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         new SettingsOption("Чёрный", IslandColorScheme.Black),
         new SettingsOption("Графит", IslandColorScheme.Graphite),
         new SettingsOption("Адаптивный", IslandColorScheme.Adaptive),
+    };
+
+    public IReadOnlyList<SettingsOption> TopBarFillOptions { get; } = new[]
+    {
+        new SettingsOption("Чёрная", global::WindowsDynamicIsland.Settings.TopBarFill.Black),
+        new SettingsOption("Только контур", global::WindowsDynamicIsland.Settings.TopBarFill.Outline),
     };
 
     public IReadOnlyList<SettingsOption> PositionOptions { get; } = new[]
@@ -304,6 +311,62 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(ref _pulseToBeat, value, (s, v) => s.Appearance.PulseToBeat = v);
     }
 
+    private bool _compactWave;
+    public bool CompactWave
+    {
+        get => _compactWave;
+        set => Set(ref _compactWave, value, (s, v) => s.Appearance.CompactWave = v);
+    }
+
+    private bool _expandedWave;
+    public bool ExpandedWave
+    {
+        get => _expandedWave;
+        set => Set(ref _expandedWave, value, (s, v) => s.Appearance.ExpandedWave = v);
+    }
+
+    private bool _waveArtworkColors;
+    public bool WaveArtworkColors
+    {
+        get => _waveArtworkColors;
+        set => Set(ref _waveArtworkColors, value, (s, v) => s.Appearance.WaveArtworkColors = v);
+    }
+
+    private bool _waveAmbientColor;
+    public bool WaveAmbientColor
+    {
+        get => _waveAmbientColor;
+        set => Set(ref _waveAmbientColor, value, (s, v) => s.Appearance.WaveAmbientColor = v);
+    }
+
+    private bool _topBarMode;
+    public bool TopBarMode
+    {
+        get => _topBarMode;
+        set => Set(ref _topBarMode, value, (s, v) => s.Appearance.TopBarMode = v);
+    }
+
+    private TopBarFill _topBarFill;
+    public TopBarFill TopBarFill
+    {
+        get => _topBarFill;
+        set => Set(ref _topBarFill, value, (s, v) => s.Appearance.TopBarFill = v);
+    }
+
+    private double _topBarHeight;
+    public double TopBarHeight
+    {
+        get => _topBarHeight;
+        set
+        {
+            Set(ref _topBarHeight, value, (s, v) => s.Appearance.TopBarHeight = v, true);
+            OnPropertyChanged(nameof(TopBarHeightText));
+        }
+    }
+
+    /// <summary>"авто" for 0, otherwise the height in px.</summary>
+    public string TopBarHeightText => TopBarHeight <= 0 ? "авто" : $"{TopBarHeight:0} px";
+
     public bool ExpandOnHover
     {
         get => _expandOnHover;
@@ -422,6 +485,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     private bool _downloadsEnabled;
+    private bool _clipboardHistoryEnabled;
+    public bool ClipboardHistoryEnabled
+    {
+        get => _clipboardHistoryEnabled;
+        set => Set(ref _clipboardHistoryEnabled, value, (s, v) => s.Features.ClipboardHistoryEnabled = v);
+    }
+
+    private bool _clipboardIndicator;
+    public bool ClipboardIndicator
+    {
+        get => _clipboardIndicator;
+        set => Set(ref _clipboardIndicator, value, (s, v) => s.Features.ClipboardIndicator = v);
+    }
+
+    private double _clipboardMaxItems;
+    public double ClipboardMaxItems
+    {
+        get => _clipboardMaxItems;
+        set => Set(ref _clipboardMaxItems, value, (s, v) => s.Features.ClipboardMaxItems = (int)Math.Round(v), true);
+    }
+
+    public ICommand OpenClipboardHistoryCommand => _openClipboardHistory ??= new RelayCommand(() => _bus.Publish(new OpenClipboardHistoryRequested()));
+    private ICommand? _openClipboardHistory;
+
     public bool DownloadsEnabled
     {
         get => _downloadsEnabled;
@@ -699,6 +786,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ShowWhenIdle = a.ShowWhenIdle;
             ExpandOnHover = a.ExpandOnHover;
             PulseToBeat = a.PulseToBeat;
+            CompactWave = a.CompactWave;
+            ExpandedWave = a.ExpandedWave;
+            WaveArtworkColors = a.WaveArtworkColors;
+            WaveAmbientColor = a.WaveAmbientColor;
+            TopBarMode = a.TopBarMode;
+            TopBarFill = a.TopBarFill;
+            TopBarHeight = a.TopBarHeight;
 
             var f = s.Features;
             NotificationsEnabled = f.NotificationsEnabled;
@@ -711,6 +805,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             VisualizerDeviceId = f.VisualizerDeviceId;
             VisualizerSensitivity = f.VisualizerSensitivity;
             DownloadsEnabled = f.DownloadsEnabled;
+            ClipboardHistoryEnabled = f.ClipboardHistoryEnabled;
+            ClipboardIndicator = f.ClipboardIndicator;
+            ClipboardMaxItems = f.ClipboardMaxItems;
             DownloadsFolder = f.DownloadsFolder;
 
             var i = s.Indicators;
@@ -838,6 +935,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         nameof(HotkeySettings.MediaPlayPause) => h.MediaPlayPause,
         nameof(HotkeySettings.StartStopwatch) => h.StartStopwatch,
         nameof(HotkeySettings.OpenSettings) => h.OpenSettings,
+        nameof(HotkeySettings.ClipboardHistory) => h.ClipboardHistory,
         _ => "",
     };
 
@@ -850,6 +948,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             case nameof(HotkeySettings.MediaPlayPause): h.MediaPlayPause = value; break;
             case nameof(HotkeySettings.StartStopwatch): h.StartStopwatch = value; break;
             case nameof(HotkeySettings.OpenSettings): h.OpenSettings = value; break;
+            case nameof(HotkeySettings.ClipboardHistory): h.ClipboardHistory = value; break;
         }
     }
 

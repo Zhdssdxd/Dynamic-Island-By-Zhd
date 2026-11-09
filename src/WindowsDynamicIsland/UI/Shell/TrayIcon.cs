@@ -81,6 +81,7 @@ public sealed class TrayIcon : IDisposable
         }
 
         _menu.Items.Add(new Forms.ToolStripSeparator());
+        _menu.Items.Add(Item("История буфера обмена", () => _bus.Publish(new OpenClipboardHistoryRequested())));
         _menu.Items.Add(Item("Настройки…", () => _bus.Publish(new OpenSettingsRequested())));
         _menu.Items.Add(Item("Выход", () => _bus.Publish(new ExitRequested())));
     }

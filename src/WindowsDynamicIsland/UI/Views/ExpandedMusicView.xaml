@@ -14,17 +14,17 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Soft audio-reactive wave along the bottom of the capsule (background layer, never takes clicks). -->
+        <!-- Bass-driven liquid waves rising from the bottom of the capsule (background layer, never takes clicks). -->
         <audio:VisualizerControl Grid.RowSpan="4"
                                  Height="46"
                                  Margin="-18,0,-18,-14"
                                  VerticalAlignment="Bottom"
                                  IsHitTestVisible="False"
-                                 Mode="Waveform"
+                                 Mode="BassWave"
                                  IsActive="{Binding State.IsVisualizerActive}"
-                                 BarBrush="{Binding AccentBrush}"
-                                 Opacity="0.14"
-                                 Visibility="{Binding ShowPlayingBars, Converter={StaticResource BoolToVisibility}}" />
+                                 BarBrush="{Binding WaveBrush}"
+                                 Opacity="0.4"
+                                 Visibility="{Binding ShowExpandedWave, Converter={StaticResource BoolToVisibility}}" />
 
         <!-- ── Row 0: artwork · title/artist/source · visualizer ── -->
         <Grid>
