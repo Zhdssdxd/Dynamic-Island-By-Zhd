@@ -132,7 +132,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             new(nameof(HotkeySettings.MediaPlayPause), "Воспроизведение / пауза"),
             new(nameof(HotkeySettings.StartStopwatch), "Секундомер / пауза таймера"),
             new(nameof(HotkeySettings.OpenSettings), "Открыть настройки"),
-            new(nameof(HotkeySettings.ClipboardHistory), "История буфера обмена"),
+            new(nameof(HotkeySettings.ClipboardHistory), "Буфер обмена в острове"),
         };
 
         StartTimerCommand = new RelayCommand(() => _bus.Publish(new TimerCommand(TimerCommandKind.StartCountdown)));

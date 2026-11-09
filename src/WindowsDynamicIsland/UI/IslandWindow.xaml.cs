@@ -36,6 +36,8 @@ public partial class IslandWindow : Window
     private static readonly TimeSpan CollapseAfterLeave = TimeSpan.FromSeconds(2.5);
     private static readonly TimeSpan CollapseWithoutMouse = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan HoverExpandDelay = TimeSpan.FromMilliseconds(350);
+    /// <summary>The clipboard is usually opened from the keyboard — give the mouse time to get there.</summary>
+    private static readonly TimeSpan ClipboardCollapseWithoutMouse = TimeSpan.FromSeconds(12);
 
     private readonly IslandController _controller;
     private readonly SettingsManager _settings;
@@ -70,9 +72,12 @@ public partial class IslandWindow : Window
     private static readonly Brush OutlineStroke = CreateFrozenBrush(Color.FromArgb(0x5C, 0xFF, 0xFF, 0xFF));
 
     // Beat pulse (bottom edge bounces to the music while expanded).
-    private const double BeatMaxOffset = 12;
-    private const double BeatBreathing = 2.5;
-    private const double WaveBandAmplitude = 6;
+    private const double BeatMaxOffset = 22;
+    private const double BeatBreathing = 4;
+    private const double WaveBandAmplitude = 9;
+    /// <summary>Fine ripple on top of the swell, driven by the highs (texture).</summary>
+    private const double WaveRippleAmplitude = 3;
+    private double _highLevel;
     private const int WavePoints = 48;
     /// <summary>Frequency heard at the centre of the bottom wave (bass) …</summary>
     private const double WaveCenterHz = 55;
@@ -350,11 +355,11 @@ public partial class IslandWindow : Window
 
         // Expanded via hotkey/tray (mouse elsewhere) → collapse on its own after a while.
         if (IsExpandedKind(kind) && !Capsule.IsMouseOver && !_collapseTimer.IsEnabled)
-            StartCollapseTimer(CollapseWithoutMouse);
+            StartCollapseTimer(kind == IslandViewKind.Clipboard ? ClipboardCollapseWithoutMouse : CollapseWithoutMouse);
     }
 
     private static bool IsExpandedKind(IslandViewKind kind) => kind is IslandViewKind.ExpandedMusic or IslandViewKind.ExpandedVideo
-        or IslandViewKind.ExpandedTimer or IslandViewKind.ExpandedDownload or IslandViewKind.Dashboard;
+        or IslandViewKind.ExpandedTimer or IslandViewKind.ExpandedDownload or IslandViewKind.Dashboard or IslandViewKind.Clipboard;
 
     private static ContentTransition ChooseTransition(IslandViewKind from, IslandViewKind to)
     {
@@ -377,6 +382,7 @@ public partial class IslandWindow : Window
             IslandViewKind.ExpandedTimer => new ExpandedTimerView(),
             IslandViewKind.ExpandedDownload => new ExpandedDownloadView(),
             IslandViewKind.Dashboard => new DashboardView(),
+            IslandViewKind.Clipboard => new ClipboardView(),
             IslandViewKind.Notification => new NotificationView(),
             IslandViewKind.Indicator => new IndicatorView(),
             _ => new IdleView(),
@@ -566,12 +572,15 @@ public partial class IslandWindow : Window
         {
             double bass = SpectrumShaper.PeakBetween(_beatBands, SpectrumShaper.MinHz, SpectrumShaper.BassHighHz);
             _bassAverage += (bass - _bassAverage) * 0.05;
-            kick = Math.Clamp((bass - _bassAverage * 1.08) / 0.22, 0, 1);
+            kick = Math.Clamp((bass - _bassAverage * 1.04) / 0.16, 0, 1);
             target = BeatMaxOffset * kick + BeatBreathing * bass;
+            var high = SpectrumShaper.PeakBetween(_beatBands, 2500, 9000);
+            _highLevel += (high - _highLevel) * 0.35;
         }
 
         // Fast attack, smooth release.
-        var k = target > _beatOffset ? 0.55 : 0.10;
+        var k = target > _beatOffset ? 0.85 : 0.16; // hard hit, quick drop
+        if (!haveBands) _highLevel *= 0.85;
         _beatOffset += (target - _beatOffset) * Math.Min(1, k * speed);
 
         // Spectrum → wave levels, mirrored around the centre (bass in the middle).
@@ -591,13 +600,14 @@ public partial class IslandWindow : Window
             if (current > maxLevel) maxLevel = current;
         }
 
-        _wavePhase += dt * speed * (4.5 + 9 * kick);
+        _wavePhase += dt * speed * (6 + 18 * kick);
         if (_wavePhase > Math.PI * 2000) _wavePhase -= Math.PI * 2000;
 
         if (!_beatWanted && _beatOffset < 0.05 && maxLevel < 0.02f)
         {
             _beatOffset = 0;
             _bassAverage = 0;
+            _highLevel = 0;
             UnhookBeat();
             return;
         }
@@ -611,7 +621,7 @@ public partial class IslandWindow : Window
     private void UpdateWavePath()
     {
         var r = Math.Min(_radius, Math.Min(_width, _height) / 2);
-        var inset = r * 0.85;
+        var inset = r * 0.55;
         var w = _width - 2 * inset;
         if (w < 24 || _height < 40)
         {
@@ -630,9 +640,15 @@ public partial class IslandWindow : Window
         {
             var i = WavePoints - j; // right → left to close the shape
             var u = (double)i / WavePoints;
-            var envelope = Math.Pow(Math.Sin(Math.PI * u), 1.3);
-            var travel = 0.5 + 0.5 * Math.Sin(2 * Math.PI * u * 2.2 - _wavePhase);
-            var y = overlap + envelope * (_beatOffset * (0.45 + 0.55 * travel) + WaveBandAmplitude * _waveLevels[i]);
+            var envelope = Math.Pow(Math.Sin(Math.PI * u), 0.9);
+            // Pointed crests (squared sine) travelling along the edge — the black shell itself waves.
+            var crest = 0.5 + 0.5 * Math.Sin(2 * Math.PI * u * 3.4 - _wavePhase);
+            var travel = crest * crest;
+            var ripple = Math.Sin(2 * Math.PI * u * 11 - _wavePhase * 1.7);
+            var y = overlap + envelope * (_beatOffset * (0.3 + 0.7 * travel)
+                                          + WaveBandAmplitude * _waveLevels[i] * (0.6 + 0.4 * travel)
+                                          + WaveRippleAmplitude * _highLevel * ripple);
+            if (y < overlap) y = overlap;
             _waveSegment.Points[j + 1] = new Point(w * u, y);
         }
     }
@@ -687,7 +703,8 @@ public partial class IslandWindow : Window
         if (_controller.State.IsExpanded)
         {
             ResetHover();
-            if (!Capsule.IsMouseOver) StartCollapseTimer(CollapseWithoutMouse);
+            if (!Capsule.IsMouseOver)
+                StartCollapseTimer(_controller.State.IsClipboardOpen ? ClipboardCollapseWithoutMouse : CollapseWithoutMouse);
         }
         else
         {
@@ -739,7 +756,7 @@ public partial class IslandWindow : Window
         }
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("История буфера обмена", Glyphs.Copy, _vm.OpenClipboardHistoryCommand));
+        menu.Items.Add(Item("Буфер обмена", Glyphs.Copy, _vm.ToggleClipboardCommand));
         menu.Items.Add(Item("Настройки…", Glyphs.Settings, _vm.OpenSettingsCommand));
         menu.Items.Add(Item("Скрыть остров", Glyphs.Close, _vm.HideIslandCommand));
         menu.Items.Add(new Separator());

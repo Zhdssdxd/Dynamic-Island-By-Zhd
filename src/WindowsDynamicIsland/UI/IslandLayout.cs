@@ -20,6 +20,7 @@ public enum IslandViewKind
     ExpandedTimer,
     ExpandedDownload,
     Dashboard,
+    Clipboard,
     Notification,
     Indicator,
 }
@@ -64,6 +65,7 @@ public static class IslandLayout
     public static readonly Size ExpandedTimerStopwatchSize = new(340, 80);
     public static readonly Size ExpandedDownloadSize = new(380, 104);
     public static readonly Size DashboardSize = new(380, 128);
+    public static readonly Size ClipboardSize = new(420, 248);
 
     // ── Transients.
     public const double IndicatorWidth = 300;
@@ -97,6 +99,7 @@ public static class IslandLayout
             IslandActivity.Download when s.Download is not null => IslandViewKind.CompactDownload,
             _ => IslandViewKind.Idle,
         },
+        IslandPresentation.Expanded when s.IsClipboardOpen => IslandViewKind.Clipboard,
         IslandPresentation.Expanded => s.Activity switch
         {
             IslandActivity.Music when s.Media is not null => IslandViewKind.ExpandedMusic,
@@ -173,6 +176,9 @@ public static class IslandLayout
                 break;
             case IslandViewKind.Dashboard:
                 size = DashboardSize;
+                break;
+            case IslandViewKind.Clipboard:
+                size = ClipboardSize;
                 break;
             case IslandViewKind.Notification:
                 var h = s.Notification is { } n && notificationHeight is not null ? notificationHeight(n) : 80;

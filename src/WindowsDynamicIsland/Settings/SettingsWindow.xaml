@@ -358,7 +358,7 @@
 
                     <TextBlock Style="{StaticResource SettingsSectionHeader}" Text="Буфер обмена" />
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="История буфера обмена"
-                                            Tag="Запоминает скопированный текст, картинки и файлы. Открывается горячей клавишей (Ctrl+Alt+V) или из меню острова">
+                                            Tag="Запоминает скопированный текст, картинки и файлы. Ctrl+Alt+V открывает его прямо в острове (щелчок по записи — вставить); «Открыть» — большое окно с поиском">
                         <StackPanel Orientation="Horizontal">
                             <Button Style="{StaticResource SecondaryButton}" Content="Открыть" Margin="0,0,12,0"
                                     Command="{Binding OpenClipboardHistoryCommand}" />

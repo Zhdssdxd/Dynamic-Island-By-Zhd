@@ -294,7 +294,7 @@ public sealed class HotkeyManager : IIslandModule
                 _bus.Publish(new OpenSettingsRequested());
                 break;
             case HotkeyAction.ClipboardHistory:
-                _bus.Publish(new OpenClipboardHistoryRequested());
+                _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleClipboard));
                 break;
         }
     }

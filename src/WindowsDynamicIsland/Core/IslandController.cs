@@ -83,6 +83,18 @@ public sealed class IslandController : IDisposable
                 Recompute();
                 break;
             case IslandUserAction.DismissTransient: DismissTransient(); break;
+            case IslandUserAction.ToggleClipboard:
+                if (State.IsClipboardOpen && State.IsExpanded)
+                {
+                    SetExpanded(false);
+                }
+                else
+                {
+                    if (State.IsUserHidden) State.IsUserHidden = false;
+                    State.IsClipboardOpen = true;
+                    SetExpanded(true);
+                }
+                break;
         }
     }
 
@@ -92,6 +104,7 @@ public sealed class IslandController : IDisposable
         if (expanded && State.Presentation is IslandPresentation.Notification or IslandPresentation.Indicator)
             ClearTransient(showNext: false);
         State.IsExpanded = expanded;
+        if (!expanded) State.IsClipboardOpen = false;
         Recompute();
     }
 

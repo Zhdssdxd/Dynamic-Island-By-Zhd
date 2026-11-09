@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using WindowsDynamicIsland.ClipboardHistory;
 using WindowsDynamicIsland.Core;
 using WindowsDynamicIsland.Core.Models;
 using WindowsDynamicIsland.Settings;
@@ -83,7 +84,31 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         });
 
         OpenSettingsCommand = new RelayCommand(() => _bus.Publish(new OpenSettingsRequested()));
-        OpenClipboardHistoryCommand = new RelayCommand(() => _bus.Publish(new OpenClipboardHistoryRequested()));
+        OpenClipboardHistoryCommand = new RelayCommand(() =>
+        {
+            _bus.Publish(new IslandActionRequested(IslandUserAction.Collapse));
+            _bus.Publish(new OpenClipboardHistoryRequested());
+        });
+        ToggleClipboardCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleClipboard)));
+        PasteClipboardCommand = new RelayCommand(p => PasteClipboard(p as ClipboardEntry));
+        CopyClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e && ClipboardManager?.CopyToClipboard(e) == true) FlashClipboardStatus("Скопировано");
+        });
+        PinClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e) ClipboardManager?.TogglePin(e);
+        });
+        DeleteClipboardCommand = new RelayCommand(p =>
+        {
+            if (p is ClipboardEntry e) ClipboardManager?.Remove(e);
+        });
+        _clipboardStatusTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(1.5) };
+        _clipboardStatusTimer.Tick += (_, _) =>
+        {
+            _clipboardStatusTimer.Stop();
+            ClipboardStatus = "";
+        };
         ExitCommand = new RelayCommand(() => _bus.Publish(new ExitRequested()));
         HideIslandCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.ToggleVisibility)));
         DismissCommand = new RelayCommand(() => _bus.Publish(new IslandActionRequested(IslandUserAction.DismissTransient)));
@@ -112,6 +137,57 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     public ICommand StartTimerCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand OpenClipboardHistoryCommand { get; }
+    public ICommand ToggleClipboardCommand { get; }
+    /// <summary>Parameter: <see cref="ClipboardEntry"/>. Copies it and pastes into the focused app (the island never takes focus).</summary>
+    public ICommand PasteClipboardCommand { get; }
+    public ICommand CopyClipboardCommand { get; }
+    public ICommand PinClipboardCommand { get; }
+    public ICommand DeleteClipboardCommand { get; }
+
+    // ───────────────────────────── Clipboard (in the island) ─────────────────────────────
+
+    private readonly DispatcherTimer _clipboardStatusTimer;
+    private string _clipboardStatus = "";
+    private System.Collections.ObjectModel.ObservableCollection<ClipboardEntry>? _clipboardEntries;
+
+    private static ClipboardHistoryManager? ClipboardManager => ServiceRegistry.Get<ClipboardHistoryManager>();
+
+    /// <summary>Live history (newest first); null until the clipboard module has started.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<ClipboardEntry>? ClipboardEntries
+    {
+        get => _clipboardEntries;
+        private set => SetProperty(ref _clipboardEntries, value);
+    }
+
+    /// <summary>Short feedback in the clipboard header ("Скопировано").</summary>
+    public string ClipboardStatus { get => _clipboardStatus; private set => SetProperty(ref _clipboardStatus, value); }
+
+    private void FlashClipboardStatus(string text)
+    {
+        ClipboardStatus = text;
+        _clipboardStatusTimer.Stop();
+        _clipboardStatusTimer.Start();
+    }
+
+    private void PasteClipboard(ClipboardEntry? entry)
+    {
+        var manager = ClipboardManager;
+        if (entry is null || manager is null) return;
+        if (!manager.CopyToClipboard(entry))
+        {
+            FlashClipboardStatus("Буфер занят, попробуй ещё раз");
+            return;
+        }
+        _bus.Publish(new IslandActionRequested(IslandUserAction.Collapse));
+        // Give the clipboard owner change a moment to settle, then paste into the focused app.
+        var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(90) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            KeyboardPaste.SendCtrlV();
+        };
+        timer.Start();
+    }
     public ICommand ExitCommand { get; }
     public ICommand HideIslandCommand { get; }
     public ICommand DismissCommand { get; }
@@ -361,6 +437,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
     private void RefreshViewKind()
     {
         ViewKind = IslandLayout.ResolveView(State);
+        if (ViewKind == IslandViewKind.Clipboard && ClipboardEntries is null) ClipboardEntries = ClipboardManager?.Entries;
         if (ViewKind == IslandViewKind.Dashboard) RefreshClock();
         UpdateTicker();
     }
@@ -770,6 +847,7 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _ticker.Stop();
+        _clipboardStatusTimer.Stop();
         _lyricsSub.Dispose();
         State.PropertyChanged -= OnStatePropertyChanged;
     }

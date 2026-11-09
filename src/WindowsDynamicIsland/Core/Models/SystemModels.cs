@@ -191,6 +191,8 @@ public enum IslandUserAction
     Collapse,
     ToggleVisibility,
     DismissTransient,
+    /// <summary>Opens the clipboard history inside the (expanded) island, or closes it.</summary>
+    ToggleClipboard,
 }
 
 /// <summary>User intent coming from hotkeys / tray / UI, handled by IslandController.</summary>

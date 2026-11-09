@@ -105,7 +105,7 @@ public partial class ClipboardHistoryWindow : Window
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            if (GetForegroundWindow() == target) SendCtrlV();
+            if (GetForegroundWindow() == target) KeyboardPaste.SendCtrlV();
         };
         timer.Start();
     }
@@ -217,17 +217,6 @@ public partial class ClipboardHistoryWindow : Window
 
     // ───────────────────────────── Native ─────────────────────────────
 
-    private static void SendCtrlV()
-    {
-        const byte VK_CONTROL = 0x11;
-        const byte VK_V = 0x56;
-        const uint KEYEVENTF_KEYUP = 0x0002;
-        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
-        keybd_event(VK_V, 0, 0, UIntPtr.Zero);
-        keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct MARGINS
     {
@@ -242,9 +231,6 @@ public partial class ClipboardHistoryWindow : Window
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
-
-    [DllImport("user32.dll")]
-    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
