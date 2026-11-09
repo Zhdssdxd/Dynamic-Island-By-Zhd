@@ -12,10 +12,10 @@ namespace WindowsDynamicIsland.Audio;
 public sealed class FftProcessor
 {
     /// <summary>Default lowest band edge, Hz.</summary>
-    public const float DefaultMinFrequency = 40f;
+    public const float DefaultMinFrequency = 20f;
 
     /// <summary>Default highest band edge, Hz (clamped to Nyquist).</summary>
-    public const float DefaultMaxFrequency = 16000f;
+    public const float DefaultMaxFrequency = 20000f;
 
     /// <summary>Band dB value that maps to 0 (after tilt and gain).</summary>
     public const float FloorDb = -70f;

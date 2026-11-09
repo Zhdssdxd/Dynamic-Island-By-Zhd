@@ -2,8 +2,8 @@ namespace WindowsDynamicIsland.Audio;
 
 /// <summary>
 /// Turns the analyzer's logarithmic bands into what the visuals draw, the way the iPhone island does it:
-/// every bar / wave point listens to a <b>fixed frequency</b> on a logarithmic axis (not "band index × width"),
-/// the first one is always the bass (40–150 Hz) and it is allowed to jump hard on kicks.
+/// every compact bar listens to its own interval on a logarithmic 20 Hz–20 kHz axis.
+/// Bass beat detection remains available separately for the expanded wave animation.
 /// Pure math, allocation-free, unit-testable.
 /// </summary>
 public static class SpectrumShaper
@@ -14,11 +14,11 @@ public static class SpectrumShaper
     /// <summary>Highest analysed frequency (edge of the last band), Hz.</summary>
     public const double MaxHz = FftProcessor.DefaultMaxFrequency;
 
-    /// <summary>Upper edge of the bass slot (first bar / first wave point).</summary>
+    /// <summary>Upper edge of the bass region used by beat and wave analysis, Hz.</summary>
     public const double BassHighHz = 150;
 
-    /// <summary>Highest frequency a bar / point listens to (above this music has little energy to show).</summary>
-    public const double TopHz = 8000;
+    /// <summary>Upper edge of the analysed spectrum, Hz.</summary>
+    public const double TopHz = FftProcessor.DefaultMaxFrequency;
 
     /// <summary>
     /// Fractional band index (0 … bandCount−1) whose centre is <paramref name="hz"/>, for <paramref name="bandCount"/>
@@ -42,7 +42,7 @@ public static class SpectrumShaper
         return Clamp01(bands[lo] + (bands[hi] - bands[lo]) * frac);
     }
 
-    /// <summary>Loudest band whose centre lies in [<paramref name="loHz"/>, <paramref name="hiHz"/>] (at least one band).</summary>
+    /// <summary>Loudest band whose centre lies in [loHz, hiHz] (at least one band).</summary>
     public static float PeakBetween(ReadOnlySpan<float> bands, double loHz, double hiHz)
     {
         if (bands.IsEmpty) return 0f;
@@ -56,26 +56,30 @@ public static class SpectrumShaper
     }
 
     /// <summary>
-    /// Fills <paramref name="destination"/> (low → high): slot 0 = bass peak (40–150 Hz), the remaining slots cover
-    /// 150 Hz … <see cref="TopHz"/> in equal steps on a logarithmic axis (each slot = peak of its own octave slice).
+    /// Maps the complete audible spectrum (20 Hz–20 kHz) to equally spaced logarithmic slots.
+    /// Every bar represents its own frequency interval; no dedicated bass bar or bass-only boost is used.
+    /// This makes a logarithmic sweep travel naturally from the low-frequency bar to the high-frequency bar.
     /// </summary>
     public static void FixedFrequencies(ReadOnlySpan<float> bands, Span<float> destination)
     {
         var n = destination.Length;
         if (n == 0) return;
-        destination[0] = PeakBetween(bands, MinHz, BassHighHz);
-        if (n == 1) return;
-
-        var ratio = TopHz / BassHighHz;
-        var slots = n - 1;
-        for (var i = 1; i < n; i++)
+        if (bands.IsEmpty)
         {
-            var f0 = BassHighHz * Math.Pow(ratio, (i - 1.0) / slots);
-            var f1 = BassHighHz * Math.Pow(ratio, (double)i / slots);
-            // Peak of the slice, blended with the value at its geometric centre so neighbours stay continuous.
+            destination.Clear();
+            return;
+        }
+
+        var ratio = TopHz / MinHz;
+        for (var i = 0; i < n; i++)
+        {
+            var f0 = MinHz * Math.Pow(ratio, (double)i / n);
+            var f1 = MinHz * Math.Pow(ratio, (double)(i + 1) / n);
             var peak = PeakBetween(bands, f0, f1);
             var centre = SampleAt(bands, Math.Sqrt(f0 * f1));
-            destination[i] = Clamp01(0.65f * peak + 0.35f * centre);
+            // Peak keeps a narrow sweep tone visible; centre sampling prevents a single FFT bin
+            // from making adjacent bars flicker or appear completely disconnected.
+            destination[i] = Clamp01(0.75f * peak + 0.25f * centre);
         }
     }
 
@@ -83,8 +87,8 @@ public static class SpectrumShaper
 }
 
 /// <summary>
-/// Kick detector for the bass slot: compares the bass level with its slow running average and turns the excess into
-/// a punchy 0..1 value (instant attack, ~150 ms release). Not thread-safe; one instance per consumer.
+/// Kick detector for bass-driven wave motion: compares the bass level with its slow running average and turns the
+/// excess into a punchy 0..1 value (instant attack, ~150 ms release). Not thread-safe; one instance per consumer.
 /// </summary>
 public sealed class BassPunch
 {

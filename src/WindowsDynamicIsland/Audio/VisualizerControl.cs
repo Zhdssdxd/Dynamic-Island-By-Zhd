@@ -15,15 +15,15 @@ namespace WindowsDynamicIsland.Audio;
 public sealed class VisualizerControl : FrameworkElement
 {
     private const int MaxBars = 128;
-    private const int DefaultEqualizerBars = 16;
-    private const int DefaultMinimalBars = 5;
-    private const int DefaultWaveformPoints = 24;
+    private const int DefaultEqualizerBars = 6;
+    private const int DefaultMinimalBars = 6;
+    private const int DefaultWaveformPoints = 6;
     private const int MaxSourceBands = 256;
 
-    private const double RiseRate = 26.0;          // 1/s — display follows rising values quickly
-    private const double FallRate = 9.0;           // 1/s — ≈ 96 % of the way to rest after 350 ms
+    private const double RiseRate = 50.0;          // 1/s — display follows rising values quickly
+    private const double FallRate = 50.0;           // 1/s — ≈ 96 % of the way to rest after 350 ms
     private const float SettleEpsilon = 0.0015f;
-    private const double CrossfadeSeconds = 0.25;
+    private const double CrossfadeSeconds = 0.1;
     private const double MaxFrameDelta = 0.1;
 
     private const double MinimalBarWidth = 3.0;
@@ -329,23 +329,10 @@ public sealed class VisualizerControl : FrameworkElement
         var changed = false;
         var moving = false;
         for (var i = 0; i < _display.Length; i++)
-        {
-            var target = _target[i];
-            var current = _display[i];
-            var diff = target - current;
-            if (Math.Abs(diff) <= SettleEpsilon)
-            {
-                if (current != target)
-                {
-                    _display[i] = target;
-                    changed = true;
-                }
-                continue;
-            }
-            _display[i] = current + diff * (diff > 0 ? rise : fall);
-            changed = true;
-            moving = true;
-        }
+{
+    _display[i] = _target[i];
+    changed = true;
+}
 
         // Kick detector for the first (bass) bar / wave point.
         var previousPunch = _punch.Value;
@@ -476,14 +463,12 @@ public sealed class VisualizerControl : FrameworkElement
     }
 
     /// <summary>
-    /// iPhone-style mapping: every bar / wave point listens to a fixed frequency on a logarithmic axis
-    /// (<see cref="SpectrumShaper.FixedFrequencies"/>); the first one is the bass and jumps hard on kicks.
+    /// Maps the complete 20 Hz–20 kHz spectrum into the requested number of logarithmic slots.
+    /// Minimal bars therefore behave as a compact spectrum, not as one oversized bass meter plus treble meters.
     /// </summary>
     private void SampleDisplay(Span<float> destination)
     {
         SpectrumShaper.FixedFrequencies(_display, destination);
-        if (destination.Length > 0)
-            destination[0] = Math.Clamp(0.4f * destination[0] + _punch.Value, 0f, 1f);
     }
 
     /// <summary>A few pill-shaped bars centred vertically; at rest they are small pills (≈15 % height).</summary>

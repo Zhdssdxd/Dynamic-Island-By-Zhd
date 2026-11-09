@@ -794,7 +794,7 @@ public sealed class AudioAnalyzer : IIslandModule, ISpectrumSource
             _converter = converter;
 
             // 2048 points ≈ 23 Hz resolution at 44.1/48 kHz; keep similar resolution at high sample rates.
-            var fftSize = converter.SampleRate >= 88200 ? 4096 : 2048;
+            var fftSize = converter.SampleRate >= 44100 ? 4096 : 2048;
             _processor = new FftProcessor(fftSize, DefaultBandCount, converter.SampleRate);
             _window = new float[fftSize];
             _ring = new SampleRingBuffer(Math.Max(fftSize * 4, converter.SampleRate / 2 + fftSize));
