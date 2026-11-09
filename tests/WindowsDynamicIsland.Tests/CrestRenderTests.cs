@@ -23,6 +23,11 @@ public class CrestRenderTests
         var b = crest.Outline.Bounds;
         Assert.True(b.Bottom <= 164 + 0.01, $"bottom {b.Bottom}");
         Assert.True(b.Left >= -0.01 && b.Right <= crest.StripWidth + 0.01);
+        Assert.Equal(0, crest.Inset);
+        Assert.Equal(400, crest.StripWidth);
+        // Thin band: it never covers the player's content (play button sits ~25 px above the bottom).
+        Assert.False(crest.Outline.FillContains(new Point(200, 164 - 12)));
+        Assert.True(crest.Outline.FillContains(new Point(200, 164 - 3)));
         Assert.True(crest.Update(400, 164, 30, 18, 1, 2));
         Assert.True(crest.Outline.Bounds.Bottom > 170);
     }
@@ -79,6 +84,14 @@ public class CrestRenderTests
             CornerRadius = new CornerRadius(R),
             Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 3, Direction = 270, Opacity = 0.45, Color = Colors.Black },
         });
+        // Stand-in for the player's content near the bottom (play button), clipped like the real content.
+        var content = new Grid { Clip = new RectangleGeometry(new Rect(1, 1, W - 2, H - 2), R - 1, R - 1) };
+        content.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 44, Height = 44, Margin = new Thickness(0, 0, 0, 14), VerticalAlignment = VerticalAlignment.Bottom,
+            HorizontalAlignment = HorizontalAlignment.Center, Fill = Brushes.White,
+        });
+        host.Children.Add(content);
 
         var crest = new CrestWave();
         crest.Update(W, H, R, beat, swell, phase);

@@ -538,7 +538,9 @@ public sealed class IslandViewModel : ObservableObject, IDisposable
             ? blurred
             : AccentBrush;
         ShowCompactWave = ShowPlayingBars && appearance.CompactWave;
-        ShowExpandedWave = ShowPlayingBars && appearance.ExpandedWave;
+        // The beat crest already carries the bass along the bottom edge; the inner glow would only show through in the
+        // corners as stray stripes, so it is the fallback for when the crest is switched off.
+        ShowExpandedWave = ShowPlayingBars && appearance.ExpandedWave && !appearance.PulseToBeat;
 
         // Session switcher.
         var sessions = State.MediaSessions;

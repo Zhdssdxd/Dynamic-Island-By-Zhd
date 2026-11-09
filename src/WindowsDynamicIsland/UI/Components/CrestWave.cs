@@ -15,10 +15,11 @@ internal sealed class CrestWave
     public const int Points = 48;
     public const double ShadeBlur = 10;      // blur radius of the black body over the colour
     public const double BandAmplitude = 12;
-    private const double Overlap = 1.5;      // strip edge sits this far inside the outline at rest
+    private const double Overlap = 1;        // band edge sits this far inside the outline at rest
     private const double ShadeLift = 8;       // the black reaches this far past the crest's edge → no coloured rim/lines
     private const double ColourShare = 0.85;  // share of a tall drop that turns into the colour behind the island
     private const double ShadeMargin = 24;
+    private const double Band = 4;           // how far the crest reaches inside the capsule (just hides the seam)
 
     private readonly PathFigure _figure = new() { IsClosed = true, IsFilled = true };
     private readonly PolyLineSegment _segment = new();
@@ -27,7 +28,7 @@ internal sealed class CrestWave
 
     public CrestWave()
     {
-        for (var i = 0; i < Points + 2; i++) _segment.Points.Add(new Point());
+        for (var i = 0; i < 2 * Points + 1; i++) _segment.Points.Add(new Point());
         _figure.Segments.Add(_segment);
         Outline = new PathGeometry(new[] { _figure });
         for (var i = 0; i < Points + 4; i++) _shadeSegment.Points.Add(new Point());
@@ -45,17 +46,25 @@ internal sealed class CrestWave
     public bool Update(double width, double height, double radius, double beat, double swell, double phase)
     {
         var r = Math.Min(radius, Math.Min(width, height) / 2);
-        var inset = r * 0.3;
-        var w = width - 2 * inset;
+        // The crest is a thin band hugging the capsule's bottom outline (corners included) that bulges outwards. It
+        // never reaches up into the island, so it cannot cut through the player's content.
+        const double inset = 0;
+        var w = width;
         if (w < 24 || height < 40) return false;
         Inset = inset;
         StripWidth = w;
 
         var top = height - Math.Max(r, 4);
-        _figure.StartPoint = new Point(0, top);
-        _segment.Points[0] = new Point(w, top);
         _shadeFigure.StartPoint = new Point(-ShadeMargin, top - ShadeMargin);
         _shadeSegment.Points[0] = new Point(w + ShadeMargin, top - ShadeMargin);
+
+        // Upper edge, left → right (start point + Points segments).
+        _figure.StartPoint = new Point(0, Math.Max(top, BottomAt(0, width, height, r) - Overlap - Band));
+        for (var i = 1; i <= Points; i++)
+        {
+            var x = w * i / Points;
+            _segment.Points[i - 1] = new Point(x, Math.Max(top, BottomAt(inset + x, width, height, r) - Overlap - Band));
+        }
 
         var centre = 0.5 + 0.1 * Math.Sin(phase * 0.31);
         var side1 = 0.5 + 0.3 * Math.Sin(phase * 0.55 + 1.0);
@@ -63,12 +72,12 @@ internal sealed class CrestWave
         var maxBulge = 0.0;
         for (var j = 0; j <= Points; j++)
         {
-            var i = Points - j; // right → left to close the shape
+            var i = Points - j; // lower edge, right → left to close the shape
             var u = (double)i / Points;
-            var edge = BottomAt(inset + w * u, width, height, r) - Overlap;
+            var edge = Math.Max(top, BottomAt(inset + w * u, width, height, r) - Overlap);
             var bulge = Math.Max(0, Bulge(u, beat, swell, centre, side1, side2));
             if (bulge > maxBulge) maxBulge = bulge;
-            _segment.Points[j + 1] = new Point(w * u, edge + bulge);
+            _segment.Points[Points + j] = new Point(w * u, edge + bulge);
             // Small ripples stay pure black (a 2-px coloured edge on them reads as a stray line); only drops that are
             // tall enough get a coloured tip, growing smoothly with their height.
             var shadeY = edge + bulge + ShadeLift - ColourShare * bulge * SmoothStep(5, 15, bulge);

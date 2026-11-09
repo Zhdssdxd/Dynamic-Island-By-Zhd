@@ -273,7 +273,7 @@
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CompactWave}" />
                     </HeaderedContentControl>
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна в раскрытом острове"
-                                            Tag="Мягкая волна вдоль нижней части раскрытого плеера">
+                                            Tag="Мягкая волна внутри раскрытого плеера — когда «Волна под бит» выключена">
                         <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ExpandedWave}" />
                     </HeaderedContentControl>
                     <HeaderedContentControl Style="{StaticResource SettingRow}" Header="Волна цвета обложки"
