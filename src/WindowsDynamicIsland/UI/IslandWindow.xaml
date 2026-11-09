@@ -62,7 +62,16 @@
             <!-- Audio-reactive wave that forms the capsule's bottom edge while expanded on playing media.
                  A Canvas so the wave can extend below the capsule without being layout-clipped. -->
             <Canvas x:Name="WaveLayer" IsHitTestVisible="False" ClipToBounds="False">
-                <Path x:Name="WavePath" Visibility="Collapsed" Fill="{StaticResource IslandBrush}" />
+                <!-- WavePath carries the colour (what is behind the island); WaveShadePath is the island's own black body,
+                     blurred so the crest fades from black into that colour along its own contour. Clipped to the wave. -->
+                <Canvas x:Name="WaveGroup" Visibility="Collapsed">
+                    <Path x:Name="WavePath" Fill="{StaticResource IslandBrush}" />
+                    <Path x:Name="WaveShadePath" Visibility="Collapsed">
+                        <Path.Effect>
+                            <BlurEffect Radius="7" KernelType="Gaussian" RenderingBias="Performance" />
+                        </Path.Effect>
+                    </Path>
+                </Canvas>
             </Canvas>
         </Grid>
     </Grid>

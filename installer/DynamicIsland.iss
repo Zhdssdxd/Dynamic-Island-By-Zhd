@@ -3,7 +3,7 @@
 ; Per-user install, no administrator rights required.
 
 #define AppName      "Dynamic Island"
-#define AppVersion   "1.3.2"
+#define AppVersion   "1.3.3"
 #define AppPublisher "Zhd"
 #define AppExe       "DynamicIsland.exe"
 #define RunValue     "WindowsDynamicIsland"

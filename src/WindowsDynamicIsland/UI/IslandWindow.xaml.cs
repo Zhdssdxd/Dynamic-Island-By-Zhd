@@ -74,7 +74,7 @@ public partial class IslandWindow : Window
     // Beat pulse (bottom edge bounces to the music while expanded).
     private const double BeatMaxOffset = 18;
     private const double BeatBreathing = 4;
-    private const double WaveBandAmplitude = 9;
+    private const double WaveBandAmplitude = 12;
     private double _waveMaxBulge;
     private double _swellLevel;
     private const int WavePoints = 48;
@@ -85,6 +85,8 @@ public partial class IslandWindow : Window
     private readonly float[] _waveLevels = new float[WavePoints + 1];
     private readonly PathFigure _waveFigure = new() { IsClosed = true, IsFilled = true };
     private readonly PolyLineSegment _waveSegment = new();
+    private readonly PathFigure _shadeFigure = new() { IsClosed = true, IsFilled = true };
+    private readonly PolyLineSegment _shadeSegment = new();
     private double _wavePhase;
     private TimeSpan _lastWaveFrame;
     private readonly float[] _beatBands = new float[32];
@@ -123,7 +125,12 @@ public partial class IslandWindow : Window
         // Reusable wave geometry: start point + right top corner + (WavePoints + 1) wave points, updated in place.
         for (var i = 0; i < WavePoints + 2; i++) _waveSegment.Points.Add(new Point());
         _waveFigure.Segments.Add(_waveSegment);
-        WavePath.Data = new PathGeometry(new[] { _waveFigure });
+        var waveGeometry = new PathGeometry(new[] { _waveFigure });
+        WavePath.Data = waveGeometry;
+        WaveGroup.Clip = waveGeometry; // the blurred shade never spills outside the crest
+        for (var i = 0; i < WavePoints + 4; i++) _shadeSegment.Points.Add(new Point());
+        _shadeFigure.Segments.Add(_shadeSegment);
+        WaveShadePath.Data = new PathGeometry(new[] { _shadeFigure });
 
         Capsule.MouseEnter += OnCapsuleMouseEnter;
         Capsule.MouseLeave += OnCapsuleMouseLeave;
@@ -462,6 +469,7 @@ public partial class IslandWindow : Window
             _fillBrush = new SolidColorBrush(Colors.Black);
             Capsule.Background = _fillBrush;
             WavePath.Fill = _fillBrush;
+            WaveShadePath.Fill = _fillBrush;
         }
         UpdateCapsuleFill(_vm.ViewKind, animate: false);
     }
@@ -551,7 +559,7 @@ public partial class IslandWindow : Window
         UpdateAmbientSampling(false);
         _lastWaveFrame = TimeSpan.Zero;
         Array.Clear(_waveLevels);
-        WavePath.Visibility = Visibility.Collapsed;
+        WaveGroup.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -627,20 +635,25 @@ public partial class IslandWindow : Window
         var w = _width - 2 * inset;
         if (w < 24 || _height < 40)
         {
-            WavePath.Visibility = Visibility.Collapsed;
+            WaveGroup.Visibility = Visibility.Collapsed;
             return;
         }
 
         const double overlap = 1.5; // covers the capsule's hairline stroke so the wave looks like the edge itself
-        Canvas.SetLeft(WavePath, inset);
-        Canvas.SetTop(WavePath, 0);
-        WavePath.Visibility = Visibility.Visible;
+        Canvas.SetLeft(WaveGroup, inset);
+        Canvas.SetTop(WaveGroup, 0);
+        WaveGroup.Visibility = Visibility.Visible;
 
         // The strip starts well inside the capsule (y = height − r); its lower edge is the capsule's real outline
         // (rounded corners included) pushed down by smooth crests — at rest it is exactly the capsule, no slab.
         var top = _height - Math.Max(r, 4);
         _waveFigure.StartPoint = new Point(0, top);
         _waveSegment.Points[0] = new Point(w, top);
+        // Shade: same outline but lifted and only partly following the crest, extended past the strip on three sides
+        // so after blurring it is solid black everywhere except a soft band just above the crest's edge.
+        const double shadeMargin = 24;
+        _shadeFigure.StartPoint = new Point(-shadeMargin, top - shadeMargin);
+        _shadeSegment.Points[0] = new Point(w + shadeMargin, top - shadeMargin);
 
         // A liquid drop: the main crest sits near the centre and swells with the bass (rounded tip, smooth fillets into
         // the edge); two smaller drops drift left and right with the mids. All fade out well before the corners.
@@ -659,17 +672,25 @@ public partial class IslandWindow : Window
             var sides = 0.75 * Gauss(u - side1, 0.09) + 0.6 * Gauss(u - side2, 0.09);
             var bulge = envelope * (_beatOffset * main + WaveBandAmplitude * _swellLevel * sides);
             if (bulge > maxBulge) maxBulge = bulge;
-            _waveSegment.Points[j + 1] = new Point(w * u, edge + Math.Max(0, bulge));
+            bulge = Math.Max(0, bulge);
+            _waveSegment.Points[j + 1] = new Point(w * u, edge + bulge);
+            var shadeY = edge + ShadeLift + ShadeFollow * bulge;
+            _shadeSegment.Points[j + 2] = new Point(w * u, shadeY);
+            if (j == 0) _shadeSegment.Points[1] = new Point(w + shadeMargin, shadeY);
+            if (j == WavePoints) _shadeSegment.Points[j + 3] = new Point(-shadeMargin, shadeY);
         }
         _waveMaxBulge += (maxBulge - _waveMaxBulge) * 0.2;
 
         if (_ambientWaveBrush is not null && ReferenceEquals(WavePath.Fill, _ambientWaveBrush))
         {
-            // Black where it leaves the capsule, melting into the colour of what is behind the island at the crest.
-            _ambientWaveBrush.StartPoint = new Point(0, _height - overlap);
-            _ambientWaveBrush.EndPoint = new Point(0, _height + Math.Max(4, _waveMaxBulge));
+            // Colour runs left → right like the screen under the crest.
+            _ambientWaveBrush.StartPoint = new Point(0, 0);
+            _ambientWaveBrush.EndPoint = new Point(w, 0);
         }
     }
+
+    private const double ShadeLift = 2.5;     // px below the capsule edge the black reaches at rest (no coloured rim)
+    private const double ShadeFollow = 0.25;  // share of the crest the black follows → the rest shows the colour
 
     private static double Gauss(double d, double sigma)
     {
@@ -691,12 +712,14 @@ public partial class IslandWindow : Window
 
     // ───────────────────────────── Ambient colour (what is behind the island) ─────────────────────────────
 
+    private const int AmbientColumns = 7;
     private LinearGradientBrush? _ambientWaveBrush;
-    private Color _ambientColor = Colors.Black;
-    private Color _ambientTarget = Colors.Black;
+    private readonly Color[] _ambientColors = new Color[AmbientColumns];
+    private readonly Color[] _ambientTargets = new Color[AmbientColumns];
+    private bool _ambientValid;
     private DispatcherTimer? _ambientTimer;
 
-    /// <summary>Wave colour follows the screen around the island while the beat wave runs (setting "Волна цвета фона").</summary>
+    /// <summary>Wave colour follows the screen under the island while the beat wave runs (setting "Волна цвета фона").</summary>
     private void UpdateAmbientSampling(bool active)
     {
         var enabled = active && _controller.State.Settings.Appearance.WaveAmbientColor;
@@ -705,33 +728,35 @@ public partial class IslandWindow : Window
             if (_ambientWaveBrush is null)
             {
                 _ambientWaveBrush = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute };
-                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 0));
-                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 0.45));
-                _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, 1));
+                for (var i = 0; i < AmbientColumns; i++)
+                    _ambientWaveBrush.GradientStops.Add(new GradientStop(Colors.Black, (double)i / (AmbientColumns - 1)));
             }
             WavePath.Fill = _ambientWaveBrush;
+            WaveShadePath.Visibility = Visibility.Visible;
             if (_ambientTimer is null)
             {
-                _ambientTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(400) };
+                _ambientTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(250) };
                 _ambientTimer.Tick += (_, _) => SampleAmbient();
             }
             if (!_ambientTimer.IsEnabled)
             {
+                _ambientValid = false;
                 SampleAmbient();
-                _ambientColor = _ambientTarget;
+                Array.Copy(_ambientTargets, _ambientColors, AmbientColumns);
                 _ambientTimer.Start();
             }
         }
         else
         {
             _ambientTimer?.Stop();
+            WaveShadePath.Visibility = Visibility.Collapsed;
             if (_fillBrush is not null) WavePath.Fill = _fillBrush;
         }
     }
 
     /// <summary>
-    /// Averages small screen areas just outside the island (left, right and below the wave, clear of the shadow),
-    /// i.e. the wallpaper / window behind it. Physical pixels; a few hundred pixels every 400 ms.
+    /// Reads a thin strip of the screen just below the island (past its shadow), i.e. exactly what the crest hangs
+    /// over, and averages it into <see cref="AmbientColumns"/> colours from left to right. Physical pixels.
     /// </summary>
     private void SampleAmbient()
     {
@@ -741,39 +766,38 @@ public partial class IslandWindow : Window
             var topLeft = CapsuleHost.PointToScreen(new Point(0, 0));
             var bottomRight = CapsuleHost.PointToScreen(new Point(_width, _height));
             var scale = Math.Max(0.5, (bottomRight.X - topLeft.X) / Math.Max(1, _width));
-            int L = (int)topLeft.X, R = (int)bottomRight.X, B = (int)bottomRight.Y;
-            var gap = (int)(28 * scale);
-            var size = (int)(44 * scale);
-            var band = (int)(18 * scale);
-            var rects = new[]
-            {
-                new System.Drawing.Rectangle(L - gap - size, B - band, size, band),
-                new System.Drawing.Rectangle(R + gap, B - band, size, band),
-                new System.Drawing.Rectangle((L + R) / 2 - size, B + (int)(62 * scale), size * 2, band / 2 + 1),
-            };
-
+            var r = Math.Min(_radius, Math.Min(_width, _height) / 2) * 0.3 * scale;
+            var left = (int)(topLeft.X + r);
+            var right = (int)(bottomRight.X - r);
+            var y = (int)(bottomRight.Y + (BeatMaxOffset + 22) * scale); // below the crest and the drop shadow
+            var strip = new System.Drawing.Rectangle(left, y, Math.Max(2, right - left), Math.Max(2, (int)(10 * scale)));
             var virt = System.Windows.Forms.SystemInformation.VirtualScreen;
-            double sr = 0, sg = 0, sb = 0;
-            var n = 0;
-            foreach (var rect in rects)
+            var clipped = System.Drawing.Rectangle.Intersect(strip, virt);
+            if (clipped.Width < AmbientColumns * 2 || clipped.Height < 2) return;
+
+            using var bmp = new System.Drawing.Bitmap(clipped.Width, clipped.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+                g.CopyFromScreen(clipped.Location, System.Drawing.Point.Empty, clipped.Size);
+
+            var colWidth = bmp.Width / (double)AmbientColumns;
+            for (var c = 0; c < AmbientColumns; c++)
             {
-                var clipped = System.Drawing.Rectangle.Intersect(rect, virt);
-                if (clipped.Width < 2 || clipped.Height < 2) continue;
-                using var bmp = new System.Drawing.Bitmap(clipped.Width, clipped.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                using (var g = System.Drawing.Graphics.FromImage(bmp))
-                    g.CopyFromScreen(clipped.Location, System.Drawing.Point.Empty, clipped.Size);
-                for (var y = 0; y < bmp.Height; y += 3)
-                for (var x = 0; x < bmp.Width; x += 3)
+                double sr = 0, sg = 0, sb = 0;
+                var n = 0;
+                var x0 = (int)(c * colWidth);
+                var x1 = Math.Min(bmp.Width, (int)((c + 1) * colWidth));
+                for (var py = 0; py < bmp.Height; py += 3)
+                for (var px = x0; px < x1; px += 3)
                 {
-                    var c = bmp.GetPixel(x, y);
-                    sr += c.R;
-                    sg += c.G;
-                    sb += c.B;
+                    var p = bmp.GetPixel(px, py);
+                    sr += p.R;
+                    sg += p.G;
+                    sb += p.B;
                     n++;
                 }
+                if (n > 0) _ambientTargets[c] = Vivid(Color.FromRgb((byte)(sr / n), (byte)(sg / n), (byte)(sb / n)));
             }
-            if (n == 0) return;
-            _ambientTarget = Color.FromRgb((byte)(sr / n), (byte)(sg / n), (byte)(sb / n));
+            _ambientValid = true;
         }
         catch (Exception ex)
         {
@@ -782,25 +806,63 @@ public partial class IslandWindow : Window
         }
     }
 
-    /// <summary>Per frame: glide the wave colour toward the sampled one.</summary>
+    /// <summary>
+    /// The crest should read as a lit edge, not as a hole showing the background: keep the hue of what is behind,
+    /// push saturation up and keep brightness in a range that stands out against both the black body and the screen.
+    /// </summary>
+    internal static Color Vivid(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var delta = max - min;
+        double h = 0;
+        if (delta > 1e-6)
+        {
+            if (max == r) h = ((g - b) / delta % 6 + 6) % 6;
+            else if (max == g) h = (b - r) / delta + 2;
+            else h = (r - g) / delta + 4;
+        }
+        var s = max <= 0 ? 0 : delta / max;
+        s = Math.Min(1, s * 1.6);
+        var v = Math.Clamp(max, 0.55, 0.92);
+
+        var chroma = v * s;
+        var xx = chroma * (1 - Math.Abs(h % 2 - 1));
+        double r1, g1, b1;
+        switch ((int)h)
+        {
+            case 0: (r1, g1, b1) = (chroma, xx, 0); break;
+            case 1: (r1, g1, b1) = (xx, chroma, 0); break;
+            case 2: (r1, g1, b1) = (0, chroma, xx); break;
+            case 3: (r1, g1, b1) = (0, xx, chroma); break;
+            case 4: (r1, g1, b1) = (xx, 0, chroma); break;
+            default: (r1, g1, b1) = (chroma, 0, xx); break;
+        }
+        var m = v - chroma;
+        return Color.FromRgb(
+            (byte)Math.Round((r1 + m) * 255),
+            (byte)Math.Round((g1 + m) * 255),
+            (byte)Math.Round((b1 + m) * 255));
+    }
+
+    /// <summary>Per frame: glide every column toward its sampled colour.</summary>
     private void StepAmbientColor(double dt)
     {
-        if (_ambientWaveBrush is null || !ReferenceEquals(WavePath.Fill, _ambientWaveBrush)) return;
-        var k = 1 - Math.Exp(-dt * 4);
-        _ambientColor = Color.FromRgb(
-            (byte)(_ambientColor.R + (_ambientTarget.R - _ambientColor.R) * k),
-            (byte)(_ambientColor.G + (_ambientTarget.G - _ambientColor.G) * k),
-            (byte)(_ambientColor.B + (_ambientTarget.B - _ambientColor.B) * k));
+        if (_ambientWaveBrush is null || !ReferenceEquals(WavePath.Fill, _ambientWaveBrush) || !_ambientValid) return;
+        var k = 1 - Math.Exp(-dt * 5);
         var alpha = _fillBrush?.Color.A ?? (byte)255;
-        // Black body; only the tip of the drop picks up the colour behind the island (60 % mix → glossy, not washed out).
-        var body = Color.FromArgb(alpha, _fillColor.R, _fillColor.G, _fillColor.B);
-        var tip = Color.FromArgb(alpha,
-            (byte)(_fillColor.R + (_ambientColor.R - _fillColor.R) * 0.6),
-            (byte)(_fillColor.G + (_ambientColor.G - _fillColor.G) * 0.6),
-            (byte)(_fillColor.B + (_ambientColor.B - _fillColor.B) * 0.6));
-        _ambientWaveBrush.GradientStops[0].Color = body;
-        _ambientWaveBrush.GradientStops[1].Color = body;
-        _ambientWaveBrush.GradientStops[2].Color = tip;
+        for (var i = 0; i < AmbientColumns; i++)
+        {
+            var from = _ambientColors[i];
+            var to = _ambientTargets[i];
+            var c = Color.FromRgb(
+                (byte)Math.Round(from.R + (to.R - from.R) * k),
+                (byte)Math.Round(from.G + (to.G - from.G) * k),
+                (byte)Math.Round(from.B + (to.B - from.B) * k));
+            _ambientColors[i] = c;
+            _ambientWaveBrush.GradientStops[i].Color = Color.FromArgb(alpha, c.R, c.G, c.B);
+        }
     }
 
     // ───────────────────────────── Mouse interaction ─────────────────────────────
